@@ -8,6 +8,7 @@ from typing import Optional
 
 from src.exchange.bitget_client import BitgetClient
 from src.exchange.data_fetcher import DataFetcher
+from src.exchange.websocket_client import BitgetWebSocket
 from src.core.market_analyzer import MarketAnalyzer
 from src.core.risk_manager import RiskManager
 from src.core.order_executor import OrderExecutor
@@ -33,6 +34,7 @@ class TradingBot:
 
     def __init__(self):
         self._exchange = BitgetClient()
+        self._ws_client: Optional[BitgetWebSocket] = None
         self._data_fetcher: Optional[DataFetcher] = None
         self._analyzer: Optional[MarketAnalyzer] = None
         self._risk: Optional[RiskManager] = None
@@ -56,9 +58,19 @@ class TradingBot:
         logger.info(f"   모드: {'🔧 데모' if self._settings.is_demo else '⚠️ 라이브'}")
         logger.info("=" * 50)
 
-        # DataFetcher 초기화 (REST로 히스토리컬 데이터 로드)
-        self._data_fetcher = DataFetcher(self._exchange)
+        # WebSocket 클라이언트 생성
+        self._ws_client = BitgetWebSocket()
+
+        # DataFetcher 초기화 (REST + WebSocket)
+        self._data_fetcher = DataFetcher(self._exchange, self._ws_client)
         await self._data_fetcher.initialize()
+
+        # WebSocket 실시간 데이터 시작
+        try:
+            await self._data_fetcher.start_realtime()
+            logger.info("🔴 WebSocket 실시간 데이터 활성화")
+        except Exception as e:
+            logger.warning(f"WebSocket 활성화 실패, REST 전용 모드: {e}")
 
         # 핵심 엔진 초기화
         self._analyzer = MarketAnalyzer(self._data_fetcher)
@@ -82,11 +94,16 @@ class TradingBot:
         await self.initialize()
 
         try:
-            await asyncio.gather(
+            tasks = [
                 self._analysis_loop(),
                 self._position_monitor_loop(),
                 self._heartbeat_loop(),
-            )
+            ]
+            # WebSocket 리스닝 태스크 추가
+            if self._ws_client and self._ws_client.is_connected:
+                tasks.append(self._ws_client.listen())
+
+            await asyncio.gather(*tasks)
         except asyncio.CancelledError:
             logger.info("봇 종료 요청")
         except Exception as e:
@@ -190,6 +207,8 @@ class TradingBot:
 
         BotStatusRepository.update_status(status=BotState.STOPPED)
 
+        if self._ws_client:
+            await self._ws_client.stop()
         if self._data_fetcher:
             await self._data_fetcher.close()
         if self._exchange:

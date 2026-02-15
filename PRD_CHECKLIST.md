@@ -14,16 +14,16 @@
 - [x] 아키텍처/호스팅 타당성 검토 (Render Free Tier 제한 등)
 - [x] 리스크 관리 전략 고도화 (ATR, Chandelier Exit)
 - [x] **PRD 업데이트 완료** (WebSocket 도입, Single Service 아키텍처)
-- [ ] Render Free Tier 유지를 위한 Uptime Monitoring 설정 준비
+- [x] Render Free Tier 유지를 위한 Uptime Monitoring 설정 준비
 
 ---
 
 ## 개발 체크리스트 (Updated)
 
 ### Phase 1.5: Real-time Infrastructure (New)
-- [ ] Bitget WebSocket Client 구현 (`aiohttp` 사용)
-- [ ] Connection Manager (Auto-reconnect) 구현
-- [ ] Unified Service (FastAPI + Asyncio Task) 구조 설계
+- [x] Bitget WebSocket Client 구현 (`aiohttp` 사용)
+- [x] Connection Manager (Auto-reconnect) 구현
+- [x] Unified Service (FastAPI + Asyncio Task) 구조 설계
 
 
 ---
@@ -106,16 +106,16 @@
 
 ### API 키 발급
 
-- [ ] Bitget 2FA 설정 완료
-- [ ] API Key 발급 (가이드: BITGET_API_GUIDE.md 참조)
-- [ ] 데모 트레이딩 API 발급 (테스트용)
+- [x] Bitget 2FA 설정 완료
+- [x] API Key 발급 (가이드: BITGET_API_GUIDE.md 참조)
+- [x] 데모 트레이딩 API 발급 (테스트용)
 
 ### Discord Bot 설정
 
-- [ ] Discord 서버 생성/선택
-- [ ] Discord Developer Portal에서 Bot 생성
-- [ ] Bot Token 발급
-- [ ] 서버에 Bot 초대
+- [x] Discord 서버 생성/선택
+- [x] Discord Developer Portal에서 Bot 생성
+- [x] Bot Token 발급
+- [x] 서버에 Bot 초대
 
 ### 거래 자산
 
@@ -151,16 +151,21 @@
 
 ## 다음 단계
 
-1. **사전 준비** (사용자)
-   - [ ] Bitget API Key 발급
-   - [ ] Discord Bot 생성
-   - [ ] Supabase 계정 생성
-   - [ ] Render 계정 생성
+1. **사전 준비** (사용자) ✅ 완료
+   - [x] Bitget API Key 발급
+   - [x] Discord Bot 생성
+   - [x] Supabase 계정 생성
+   - [x] Render 계정 생성
 
-2. **PRD 최종 작성** (Claude Code)
-   - [ ] 확정된 내용으로 PRD 작성
-   - [ ] 프로젝트 구조 설계
-   - [ ] 개발 시작
+2. **PRD 최종 작성** (Claude Code) ✅ 완료
+   - [x] 확정된 내용으로 PRD 작성
+   - [x] 프로젝트 구조 설계
+   - [x] 개발 시작
+
+3. **배포 완료**
+   - [x] Render 배포 (https://crypto-auto-trading.onrender.com)
+   - [x] 환경변수 설정
+   - [ ] 데모 트레이딩 테스트 (2주간)
 
 ---
 
