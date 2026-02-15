@@ -1,0 +1,38 @@
+# Render 배포 설정 (Single Service Architecture)
+# Free Tier 최적화: Web + Bot을 하나의 서비스로 통합
+
+services:
+  - type: web
+    name: btc-trading-bot
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn src.web.app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.7"
+      - key: TRADING_MODE
+        sync: false
+      - key: TRADING_BOT_ENABLED
+        value: "true"
+      - key: BITGET_API_KEY
+        sync: false
+      - key: BITGET_SECRET_KEY
+        sync: false
+      - key: BITGET_PASSPHRASE
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_GUILD_ID
+        sync: false
+      - key: DISCORD_CHANNEL_ID
+        sync: false
+      - key: DISCORD_ADMIN_ID
+        sync: false
+      - key: LOG_LEVEL
+        value: INFO

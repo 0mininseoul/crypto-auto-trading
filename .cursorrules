@@ -1,0 +1,8 @@
+# General Rules
+You must always use Korean (한국어) as the primary language for:
+1. All communication with the user.
+2. All artifacts (Tasks, Walkthroughs, Implementation Plans, etc.).
+3. Code comments and documentation (unless the code itself requires English).
+
+Exceptions:
+- Technical terms, variable names, and file names can be in English where standard.
