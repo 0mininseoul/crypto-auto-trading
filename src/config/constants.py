@@ -15,19 +15,19 @@ DEMO_SYMBOL = "SBTCSUSDT"
 DEMO_CCXT_SYMBOL = "SBTC/SUSDT:SUSDT"
 DEMO_PRODUCT_TYPE = "SUSDT-FUTURES"
 
-# 타임프레임
+# 타임프레임 (15분봉 데이트레이딩 체제)
 TIMEFRAMES = {
-    "main": "4h",       # 메인 분석
-    "daily": "1d",      # 일봉 추세
-    "hourly": "1h",     # 참조
-    "fifteen": "15m",   # 세부 참조
+    "main": "15m",      # 메인 분석 (신호 생성)
+    "trend_1h": "1h",   # 추세 확인 (상위 TF 필터)
+    "trend_4h": "4h",   # 추세 확인 (보조)
+    "timing": "5m",     # 정밀 타이밍 확인
     "one_min": "1m",    # 실시간 모니터링
 }
 
 # ============================================
 # 기술적 지표 설정
 # ============================================
-EMA_PERIODS = [13, 21, 50, 200]
+EMA_PERIODS = [9, 21, 50, 200]
 RSI_PERIOD = 14
 MACD_FAST = 12
 MACD_SLOW = 26
@@ -53,8 +53,8 @@ MARGIN_MODE = "isolated"        # 격리 마진
 # ============================================
 # 손절 / 익절
 # ============================================
-STOP_LOSS_BUFFER_PERCENT = 0.5  # 손절 버퍼 %
-MAX_STOP_LOSS_PERCENT = 3.0     # 최대 손절률
+STOP_LOSS_BUFFER_PERCENT = 0.3  # 손절 버퍼 %
+MAX_STOP_LOSS_PERCENT = 2.0     # 최대 손절률 (데이트레이딩)
 
 TAKE_PROFIT_LEVELS = {
     1: {"rr_ratio": 1.5, "close_percent": 50, "action": "move_sl_to_entry"},
@@ -62,17 +62,17 @@ TAKE_PROFIT_LEVELS = {
     3: {"rr_ratio": 4.0, "close_percent": 20, "action": "close_remaining"},
 }
 
-TRAILING_STOP_PERCENT = 1.5     # 트레일링 스탑 %
+TRAILING_STOP_PERCENT = 1.0     # 트레일링 스탑 % (데이트레이딩)
 
 # ============================================
 # 거래 제한
 # ============================================
 MAX_CONCURRENT_POSITIONS = 1
-MAX_DAILY_TRADES = 3
-MAX_WEEKLY_TRADES = 10
+MAX_DAILY_TRADES = 8            # 데이트레이딩 빈도 반영
+MAX_WEEKLY_TRADES = 30           # 데이트레이딩 빈도 반영
 CONSECUTIVE_LOSS_COOLDOWN = {
     "losses": 3,
-    "cooldown_hours": 24,
+    "cooldown_hours": 12,        # 데이트레이딩 특성 반영
 }
 
 # ============================================

@@ -24,7 +24,7 @@ from src.utils.logger import setup_logger
 logger = setup_logger("trading_bot")
 
 # 분석 주기 (초)
-ANALYSIS_INTERVAL = 60 * 15      # 15분마다 신호 분석
+ANALYSIS_INTERVAL = 60 * 5       # 5분마다 신호 분석 (15분봉 데이트레이딩)
 POSITION_CHECK_INTERVAL = 60     # 1분마다 포지션 모니터링
 HEARTBEAT_INTERVAL = 60 * 5      # 5분마다 하트비트
 

@@ -1,6 +1,11 @@
 """
 시장 분석 엔진 (Market Analyzer)
 지표 계산 + 시장 상태 평가 + 진입 회피 조건 + 신호 생성
+
+v2.0 — 15분봉 데이트레이딩
+- 메인: 15분봉 (신호 생성)
+- 추세 확인: 1시간봉 (상위 TF 필터)
+- 타이밍: 5분봉 (추가 확인)
 """
 import asyncio
 from datetime import datetime, timezone
@@ -51,9 +56,9 @@ class MarketAnalyzer:
 
     async def analyze(self) -> Signal:
         """
-        전체 시장 분석 실행
+        전체 시장 분석 실행 (15분봉 데이트레이딩)
 
-        1. 캔들 데이터 새로고침
+        1. 15분봉 + 1시간봉 + 5분봉 캔들 새로고침
         2. 지표 계산
         3. 진입 회피 조건 확인
         4. 매매 신호 생성
@@ -63,28 +68,32 @@ class MarketAnalyzer:
         """
         logger.info("📊 시장 분석 시작...")
 
-        # 1. 4시간봉 + 1일봉 새로고침
-        await self._data.refresh_candles("4h")
-        await self._data.refresh_candles("1d")
+        # 1. 멀티 타임프레임 캔들 새로고침
+        await self._data.refresh_candles("15m")
+        await self._data.refresh_candles("1h")
+        await self._data.refresh_candles("5m")
 
-        df_4h = self._data.get_candles("4h")
-        df_1d = self._data.get_candles("1d")
+        df_15m = self._data.get_candles("15m")
+        df_1h = self._data.get_candles("1h")
+        df_5m = self._data.get_candles("5m")
 
-        if df_4h is None or len(df_4h) < 50:
-            logger.warning("4시간봉 데이터 부족 (최소 50개 필요)")
+        if df_15m is None or len(df_15m) < 50:
+            logger.warning("15분봉 데이터 부족 (최소 50개 필요)")
             return Signal(signal_type=SignalType.NO_SIGNAL, reasons=["데이터 부족"])
 
         # 2. 지표 계산
-        df_4h = prepare_dataframe(df_4h)
-        if df_1d is not None and len(df_1d) > 50:
-            df_1d = prepare_dataframe(df_1d)
+        df_15m = prepare_dataframe(df_15m)
+        if df_1h is not None and len(df_1h) > 50:
+            df_1h = prepare_dataframe(df_1h)
+        if df_5m is not None and len(df_5m) > 30:
+            df_5m = prepare_dataframe(df_5m)
 
         # 3. 시장 상태 평가
-        market_state = self._evaluate_market_state(df_4h)
+        market_state = self._evaluate_market_state(df_15m)
         logger.info(f"   시장 상태: {market_state}")
 
         # 4. 진입 회피 조건 확인
-        avoidance = self._check_avoidance_conditions(df_4h, df_1d)
+        avoidance = self._check_avoidance_conditions(df_15m, df_1h)
         if avoidance["should_avoid"]:
             logger.warning(f"   ⛔ 진입 회피: {avoidance['reasons']}")
             self._last_analysis = {
@@ -99,9 +108,9 @@ class MarketAnalyzer:
                 reasons=avoidance["reasons"],
             )
 
-        # 5. 매매 신호 생성
-        long_signal = check_long_entry(df_4h, df_1d)
-        short_signal = check_short_entry(df_4h, df_1d)
+        # 5. 매매 신호 생성 (15분봉 메인 + 1시간봉 추세 + 5분봉 타이밍)
+        long_signal = check_long_entry(df_15m, df_1h, df_5m)
+        short_signal = check_short_entry(df_15m, df_1h, df_5m)
 
         # 더 강한 신호 선택
         if long_signal.signal_type == SignalType.LONG and short_signal.signal_type == SignalType.SHORT:
@@ -131,26 +140,26 @@ class MarketAnalyzer:
         if signal.signal_type != SignalType.NO_SIGNAL:
             logger.info(f"   📍 신호: {signal.signal_type.value} | 신뢰도: {signal.confidence:.0%}")
         else:
-            logger.info(f"   📍 신호 없음 | 필수: {signal.mandatory_met}/4, 추가: {signal.additional_met}")
+            logger.info(f"   📍 신호 없음 | 필수: {signal.mandatory_met}/3, 추가: {signal.additional_met}")
 
         return signal
 
     async def check_exit_signal(self, position_side: str) -> Signal:
         """
-        포지션 청산 신호 확인
+        포지션 청산 신호 확인 (15분봉 기반)
 
         Args:
             position_side: 'long' 또는 'short'
         """
-        df_4h = self._data.get_candles("4h")
-        if df_4h is None or len(df_4h) < 30:
+        df_15m = self._data.get_candles("15m")
+        if df_15m is None or len(df_15m) < 30:
             return Signal(signal_type=SignalType.NO_SIGNAL)
 
-        df_4h = prepare_dataframe(df_4h)
-        return check_close_signal(df_4h, position_side)
+        df_15m = prepare_dataframe(df_15m)
+        return check_close_signal(df_15m, position_side)
 
     def _evaluate_market_state(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """시장 상태 평가"""
+        """시장 상태 평가 (15분봉 기준)"""
         current_price = df["close"].iloc[-1]
         ema_50 = df["ema_50"].iloc[-1] if "ema_50" in df.columns else current_price
         ema_200 = df["ema_200"].iloc[-1] if "ema_200" in df.columns else current_price
@@ -164,13 +173,13 @@ class MarketAnalyzer:
         else:
             trend = "neutral"
 
-        # 변동성 (최근 24시간 = 6개 4시간봉)
-        recent = df.tail(6)
+        # 변동성 (최근 4시간 = 16개 15분봉)
+        recent = df.tail(16)
         volatility = ((recent["high"].max() - recent["low"].min()) / current_price) * 100
 
-        # 평균 변동성 (60개 캔들 = 10일)
-        if len(df) >= 60:
-            avg_ranges = ((df["high"] - df["low"]) / df["close"] * 100).tail(60).mean()
+        # 평균 변동성 (96개 캔들 = 24시간)
+        if len(df) >= 96:
+            avg_ranges = ((df["high"] - df["low"]) / df["close"] * 100).tail(96).mean()
         else:
             avg_ranges = volatility
 
@@ -180,43 +189,43 @@ class MarketAnalyzer:
             "ema_50": ema_50,
             "ema_200": ema_200,
             "rsi": round(rsi, 1),
-            "volatility_24h": round(volatility, 2),
+            "volatility_4h": round(volatility, 2),
             "avg_volatility": round(avg_ranges, 2),
         }
 
     def _check_avoidance_conditions(
         self,
-        df_4h: pd.DataFrame,
-        df_1d: Optional[pd.DataFrame] = None,
+        df_15m: pd.DataFrame,
+        df_1h: Optional[pd.DataFrame] = None,
     ) -> Dict[str, Any]:
         """
-        진입 회피 조건 확인
+        진입 회피 조건 확인 (15분봉 기준)
 
-        1. 24시간 변동성 > 평균 3배 (급등락)
-        2. 1일봉 EMA 50-200 사이 (불확실 구간)
+        1. 최근 4시간 변동성 > 평균 3배 (급등락)
+        2. 1시간봉 EMA 50-200 사이 (불확실 구간)
         3. 거래량 < 14MA의 50%
         """
         reasons = []
-        current_price = df_4h["close"].iloc[-1]
+        current_price = df_15m["close"].iloc[-1]
 
-        # 1. 극단적 변동성
-        recent = df_4h.tail(6)
+        # 1. 극단적 변동성 (최근 4시간 = 16개 15분봉)
+        recent = df_15m.tail(16)
         range_pct = ((recent["high"].max() - recent["low"].min()) / current_price) * 100
-        if len(df_4h) >= 60:
-            avg_range = ((df_4h["high"] - df_4h["low"]) / df_4h["close"] * 100).tail(60).mean()
+        if len(df_15m) >= 96:
+            avg_range = ((df_15m["high"] - df_15m["low"]) / df_15m["close"] * 100).tail(96).mean()
             if range_pct > avg_range * EXTREME_VOLATILITY_MULTIPLIER:
                 reasons.append(f"변동성 과대 ({range_pct:.1f}% > 평균 {avg_range:.1f}% x {EXTREME_VOLATILITY_MULTIPLIER})")
 
-        # 2. 불확실 구간 (EMA 50-200 사이)
-        if df_1d is not None and "ema_50" in df_1d.columns and "ema_200" in df_1d.columns:
-            ema50 = df_1d["ema_50"].iloc[-1]
-            ema200 = df_1d["ema_200"].iloc[-1]
-            d_price = df_1d["close"].iloc[-1]
-            if min(ema50, ema200) < d_price < max(ema50, ema200):
-                reasons.append("1일봉 EMA50-200 사이 (불확실 구간)")
+        # 2. 불확실 구간 (1시간봉 EMA 50-200 사이)
+        if df_1h is not None and "ema_50" in df_1h.columns and "ema_200" in df_1h.columns:
+            ema50 = df_1h["ema_50"].iloc[-1]
+            ema200 = df_1h["ema_200"].iloc[-1]
+            h_price = df_1h["close"].iloc[-1]
+            if min(ema50, ema200) < h_price < max(ema50, ema200):
+                reasons.append("1시간봉 EMA50-200 사이 (불확실 구간)")
 
         # 3. 거래량 부족
-        if is_volume_too_low(df_4h, threshold=LOW_VOLUME_THRESHOLD):
+        if is_volume_too_low(df_15m, threshold=LOW_VOLUME_THRESHOLD):
             reasons.append("거래량 < 14MA의 50%")
 
         return {

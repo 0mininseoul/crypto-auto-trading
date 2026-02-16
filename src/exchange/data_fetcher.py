@@ -37,12 +37,12 @@ class DataFetcher:
         """현재 가격"""
         return self._current_price
 
-    def get_candles(self, timeframe: str = "4h") -> Optional[pd.DataFrame]:
+    def get_candles(self, timeframe: str = "15m") -> Optional[pd.DataFrame]:
         """
         캔들 데이터 반환
 
         Args:
-            timeframe: '1m', '15m', '1h', '4h', '1d'
+            timeframe: '1m', '5m', '15m', '1h', '4h'
 
         Returns:
             DataFrame with columns: [timestamp, open, high, low, close, volume]

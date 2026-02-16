@@ -38,7 +38,7 @@ def add_all_emas(df: pd.DataFrame, periods: List[int] = None) -> pd.DataFrame:
 
     Args:
         df: OHLCV DataFrame
-        periods: EMA 기간 목록 (기본: [13, 21, 50, 200])
+        periods: EMA 기간 목록 (기본: [9, 21, 50, 200])
 
     Returns:
         EMA 컬럼이 추가된 DataFrame
@@ -55,7 +55,7 @@ def add_all_emas(df: pd.DataFrame, periods: List[int] = None) -> pd.DataFrame:
 def is_ema_bullish_alignment(df: pd.DataFrame, row_idx: int = -1) -> bool:
     """
     EMA 정배열 확인 (롱 조건)
-    EMA 13 > EMA 21 > EMA 50
+    EMA 9 > EMA 21 > EMA 50
 
     Args:
         df: EMA 컬럼이 포함된 DataFrame
@@ -64,7 +64,7 @@ def is_ema_bullish_alignment(df: pd.DataFrame, row_idx: int = -1) -> bool:
     row = df.iloc[row_idx]
     try:
         return (
-            row["ema_13"] > row["ema_21"] > row["ema_50"]
+            row["ema_9"] > row["ema_21"] > row["ema_50"]
         )
     except KeyError:
         logger.warning("EMA 컬럼이 없습니다. add_all_emas()를 먼저 호출하세요.")
@@ -74,12 +74,12 @@ def is_ema_bullish_alignment(df: pd.DataFrame, row_idx: int = -1) -> bool:
 def is_ema_bearish_alignment(df: pd.DataFrame, row_idx: int = -1) -> bool:
     """
     EMA 역배열 확인 (숏 조건)
-    EMA 13 < EMA 21 < EMA 50
+    EMA 9 < EMA 21 < EMA 50
     """
     row = df.iloc[row_idx]
     try:
         return (
-            row["ema_13"] < row["ema_21"] < row["ema_50"]
+            row["ema_9"] < row["ema_21"] < row["ema_50"]
         )
     except KeyError:
         logger.warning("EMA 컬럼이 없습니다. add_all_emas()를 먼저 호출하세요.")
