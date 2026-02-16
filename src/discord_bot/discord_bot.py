@@ -276,11 +276,12 @@ async def run_discord_bot():
         logger.warning("DISCORD_BOT_TOKEN 미설정 — Discord 봇 비활성화")
         return
 
-    bot = TradingDiscordBot()
     try:
-        logger.info("🔌 Discord 봇 시작 중...")
+        logger.info("🔌 Discord 봇 초기화 중...")
+        bot = TradingDiscordBot()
+        logger.info("🔌 Discord 봇 연결 시도...")
         await bot.start(token)
     except discord.LoginFailure:
         logger.error("❌ Discord 로그인 실패 — 토큰을 확인하세요")
     except Exception as e:
-        logger.error(f"❌ Discord 봇 오류: {e}")
+        logger.error(f"❌ Discord 봇 오류: {e}", exc_info=True)
