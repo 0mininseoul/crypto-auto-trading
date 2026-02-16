@@ -41,4 +41,8 @@ COPY . .
 EXPOSE 8000
 
 # Run application
-CMD uvicorn src.web.app:app --host 0.0.0.0 --port ${PORT:-8000}
+# Make script executable
+RUN chmod +x scripts/start.sh
+
+# Run application via script
+CMD ["./scripts/start.sh"]
