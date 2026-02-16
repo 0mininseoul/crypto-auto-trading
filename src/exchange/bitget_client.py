@@ -27,7 +27,7 @@ class BitgetClient:
     @property
     def symbol(self) -> str:
         """현재 모드에 맞는 심볼 반환"""
-        if self._settings.use_sandbox:
+        if self._settings.is_demo:
             return DEMO_CCXT_SYMBOL
         return CCXT_SYMBOL
 
