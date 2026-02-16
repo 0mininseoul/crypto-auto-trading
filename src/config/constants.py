@@ -100,3 +100,31 @@ DEMO_WS_PRIVATE_URL = "wss://ws.bitget.com/v2/ws/private/demo"
 WS_PING_INTERVAL = 25               # 초 단위
 WS_RECONNECT_DELAY = 1              # 초기 재연결 대기
 WS_RECONNECT_MAX_DELAY = 60         # 최대 재연결 대기
+
+
+# ============================================
+# 모드별 동적 헬퍼 함수
+# ============================================
+
+def get_quote_currency() -> str:
+    """현재 모드에 맞는 통화 단위 반환 (USDT / SUSDT)"""
+    from src.config.trading_mode import is_demo_mode
+    return "SUSDT" if is_demo_mode() else "USDT"
+
+
+def get_active_symbol() -> str:
+    """현재 모드에 맞는 심볼 반환 (SBTCSUSDT / BTCUSDT)"""
+    from src.config.trading_mode import is_demo_mode
+    return DEMO_SYMBOL if is_demo_mode() else SYMBOL
+
+
+def get_active_ccxt_symbol() -> str:
+    """현재 모드에 맞는 ccxt 심볼 반환"""
+    from src.config.trading_mode import is_demo_mode
+    return DEMO_CCXT_SYMBOL if is_demo_mode() else CCXT_SYMBOL
+
+
+def get_active_product_type() -> str:
+    """현재 모드에 맞는 product type 반환"""
+    from src.config.trading_mode import is_demo_mode
+    return DEMO_PRODUCT_TYPE if is_demo_mode() else PRODUCT_TYPE

@@ -12,7 +12,7 @@ from src.core.risk_manager import RiskManager
 from src.database.repository import TradeRepository
 from src.database.models import Trade, TradeSide, TradeStatus
 from src.indicators.signals import Signal, SignalType
-from src.config.constants import TAKE_PROFIT_LEVELS, TRAILING_STOP_PERCENT, CCXT_SYMBOL
+from src.config.constants import TAKE_PROFIT_LEVELS, TRAILING_STOP_PERCENT, get_active_symbol, get_quote_currency
 from src.utils.logger import setup_logger
 from src.utils.helpers import round_price, round_quantity
 
@@ -83,7 +83,7 @@ class OrderExecutor:
 
             # DB에 거래 기록
             trade = Trade(
-                symbol="BTCUSDT",
+                symbol=get_active_symbol(),
                 side=trade_side,
                 entry_price=entry_price,
                 quantity=order.get("amount", amount),
@@ -167,7 +167,7 @@ class OrderExecutor:
                 emoji = "💰" if pnl > 0 else "💸"
                 logger.info(
                     f"{emoji} 청산 완료 | #{trade.id} {reason} | "
-                    f"PnL: {pnl:+,.2f} USDT ({pnl_pct:+.2f}%)"
+                    f"PnL: {pnl:+,.2f} {get_quote_currency()} ({pnl_pct:+.2f}%)"
                 )
             else:
                 # 부분 청산 (수량 업데이트)

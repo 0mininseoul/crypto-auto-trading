@@ -107,7 +107,7 @@ def _register_commands(tree: app_commands.CommandTree, settings):
             embed.add_field(name="BTC 가격", value=f"${btc_price:,.2f}", inline=True)
             embed.add_field(
                 name="잔고",
-                value=f"{balance.get('total', 0):.2f} USDT" if balance else "–",
+                value=f"{balance.get('total', 0):.2f} {balance.get('currency', 'USDT')}" if balance else "–",
                 inline=True,
             )
             embed.add_field(name="오픈 포지션", value=str(len(open_trades)), inline=True)
@@ -118,7 +118,7 @@ def _register_commands(tree: app_commands.CommandTree, settings):
             await interaction.followup.send(f"❌ 오류: {e}")
 
     # ━━━ /balance ━━━
-    @tree.command(name="balance", description="USDT 잔고 조회")
+    @tree.command(name="balance", description="잔고 조회")
     async def cmd_balance(interaction: discord.Interaction):
         await interaction.response.defer()
         try:
@@ -128,10 +128,11 @@ def _register_commands(tree: app_commands.CommandTree, settings):
             balance = await client.get_balance()
             await client.close()
 
+            currency = balance.get('currency', 'USDT')
             embed = discord.Embed(title="💰 잔고", color=0xFFD700)
-            embed.add_field(name="총 잔고", value=f"{balance.get('total', 0):.4f} USDT", inline=True)
-            embed.add_field(name="사용 가능", value=f"{balance.get('free', 0):.4f} USDT", inline=True)
-            embed.add_field(name="사용 중", value=f"{balance.get('used', 0):.4f} USDT", inline=True)
+            embed.add_field(name="총 잔고", value=f"{balance.get('total', 0):.4f} {currency}", inline=True)
+            embed.add_field(name="사용 가능", value=f"{balance.get('free', 0):.4f} {currency}", inline=True)
+            embed.add_field(name="사용 중", value=f"{balance.get('used', 0):.4f} {currency}", inline=True)
 
             await interaction.followup.send(embed=embed)
         except Exception as e:
@@ -148,8 +149,11 @@ def _register_commands(tree: app_commands.CommandTree, settings):
             today_pnl = TradeRepository.get_today_pnl()
             today_count = TradeRepository.get_today_trade_count()
 
+            from src.config.constants import get_quote_currency
+            currency = get_quote_currency()
+
             embed = discord.Embed(title="📈 수익 현황", color=0x00FF88)
-            embed.add_field(name="오늘 PnL", value=f"{today_pnl:+.2f} USDT", inline=True)
+            embed.add_field(name="오늘 PnL", value=f"{today_pnl:+.2f} {currency}", inline=True)
             embed.add_field(name="오늘 거래 수", value=str(today_count), inline=True)
 
             # 최근 거래
@@ -159,7 +163,7 @@ def _register_commands(tree: app_commands.CommandTree, settings):
                 for t in recent:
                     pnl_val = float(t.get("pnl", 0) or 0)
                     emoji = "✅" if pnl_val >= 0 else "❌"
-                    lines.append(f"{emoji} {t.get('side','?').upper()} {pnl_val:+.2f} USDT")
+                    lines.append(f"{emoji} {t.get('side','?').upper()} {pnl_val:+.2f} {currency}")
                 embed.add_field(name="최근 거래", value="\n".join(lines), inline=False)
 
             await interaction.followup.send(embed=embed)
@@ -206,7 +210,7 @@ def _register_commands(tree: app_commands.CommandTree, settings):
             positions = await client.get_positions()
             closed = 0
             for pos in positions:
-                await client.close_position(pos.get("symbol", "BTCUSDT"))
+                await client.close_position(pos.get("symbol", client.symbol))
                 closed += 1
             await client.close()
 
@@ -240,7 +244,7 @@ def _register_commands(tree: app_commands.CommandTree, settings):
                 return
 
             for pos in positions:
-                await client.close_position(pos.get("symbol", "BTCUSDT"))
+                await client.close_position(pos.get("symbol", client.symbol))
             await client.close()
 
             await interaction.followup.send(f"✅ {len(positions)}개 포지션 청산 완료")

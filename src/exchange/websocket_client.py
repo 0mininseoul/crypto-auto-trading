@@ -15,6 +15,8 @@ from src.config.constants import (
     WS_PING_INTERVAL,
     WS_RECONNECT_DELAY,
     WS_RECONNECT_MAX_DELAY,
+    get_active_symbol,
+    get_active_product_type,
 )
 from src.utils.logger import setup_logger
 
@@ -89,26 +91,32 @@ class BitgetWebSocket:
         await self._ws.send_json(msg)
         logger.info(f"구독 요청: {[c['channel'] for c in channels]}")
 
-    async def subscribe_ticker(self, symbol: str = SYMBOL):
+    async def subscribe_ticker(self, symbol: str = None):
         """실시간 시세 구독"""
+        if symbol is None:
+            symbol = get_active_symbol()
         await self.subscribe([{
-            "instType": "USDT-FUTURES",
+            "instType": get_active_product_type(),
             "channel": "ticker",
             "instId": symbol,
         }])
 
-    async def subscribe_trades(self, symbol: str = SYMBOL):
+    async def subscribe_trades(self, symbol: str = None):
         """실시간 체결 구독"""
+        if symbol is None:
+            symbol = get_active_symbol()
         await self.subscribe([{
-            "instType": "USDT-FUTURES",
+            "instType": get_active_product_type(),
             "channel": "trade",
             "instId": symbol,
         }])
 
-    async def subscribe_candles(self, symbol: str = SYMBOL, interval: str = "1m"):
+    async def subscribe_candles(self, symbol: str = None, interval: str = "1m"):
         """실시간 캔들 구독"""
+        if symbol is None:
+            symbol = get_active_symbol()
         await self.subscribe([{
-            "instType": "USDT-FUTURES",
+            "instType": get_active_product_type(),
             "channel": f"candle{interval}",
             "instId": symbol,
         }])
@@ -223,11 +231,11 @@ class BitgetWebSocket:
             for channel_name in self._callbacks.keys():
                 if channel_name == "candle":
                     continue  # 일반 핸들러, 실제 채널 아님
-                inst_type = "USDT-FUTURES"
+                inst_type = get_active_product_type()
                 channels.append({
                     "instType": inst_type,
                     "channel": channel_name,
-                    "instId": SYMBOL,
+                    "instId": get_active_symbol(),
                 })
             if channels:
                 await self.subscribe(channels)

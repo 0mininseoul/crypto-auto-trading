@@ -222,7 +222,7 @@ async def close_position():
         positions = await client.get_positions()
         closed = 0
         for pos in positions:
-            await client.close_position(pos.get("symbol", "BTCUSDT"))
+            await client.close_position(pos.get("symbol", client.symbol))
             closed += 1
         await client.close()
         return {"status": "ok", "message": f"{closed}개 포지션 청산 완료"}
@@ -283,7 +283,7 @@ td {{ padding:10px 12px; border-bottom:1px solid #1a1a2a; font-size:13px; }}
 <div class="grid" id="cards">
   <div class="card"><h3>봇 상태</h3><div class="value" id="botState">–</div></div>
   <div class="card"><h3>BTC 가격</h3><div class="value" id="btcPrice">–</div></div>
-  <div class="card"><h3>잔고 (USDT)</h3><div class="value" id="balance">–</div></div>
+  <div class="card"><h3>잔고 ({"SUSDT" if is_demo else "USDT"})</h3><div class="value" id="balance">–</div></div>
   <div class="card"><h3>오늘 PnL</h3><div class="value" id="dailyPnl">–</div></div>
   <div class="card"><h3>오픈 포지션</h3><div class="value" id="openPos">–</div></div>
   <div class="card"><h3>하트비트 (KST)</h3><div class="value" id="heartbeat" style="font-size:14px">–</div></div>

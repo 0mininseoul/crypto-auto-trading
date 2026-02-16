@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any
 import discord
 
 from src.config.settings import get_settings
+from src.config.constants import get_quote_currency
 from src.utils.helpers import kst_now
 from src.utils.logger import setup_logger
 
@@ -100,7 +101,7 @@ class Notifier:
         embed.add_field(name="청산가", value=f"${exit_price:,.2f}", inline=True)
         embed.add_field(
             name="PnL",
-            value=f"{'+'if pnl>=0 else ''}{pnl:.2f} USDT ({pnl_percent:+.1f}%)",
+            value=f"{'+'if pnl>=0 else ''}{pnl:.2f} {get_quote_currency()} ({pnl_percent:+.1f}%)",
             inline=True,
         )
         embed.add_field(name="사유", value=reason, inline=False)
@@ -128,7 +129,7 @@ class Notifier:
         embed.add_field(name="손절가", value=f"${exit_price:,.2f}", inline=True)
         embed.add_field(
             name="손실",
-            value=f"{loss:.2f} USDT ({loss_percent:.1f}%)",
+            value=f"{loss:.2f} {get_quote_currency()} ({loss_percent:.1f}%)",
             inline=False,
         )
 
@@ -146,10 +147,10 @@ class Notifier:
         )
         embed.add_field(
             name="오늘 손실",
-            value=f"{daily_loss:.2f} USDT",
+            value=f"{daily_loss:.2f} {get_quote_currency()}",
             inline=True,
         )
-        embed.add_field(name="한도", value=f"{limit:.2f} USDT", inline=True)
+        embed.add_field(name="한도", value=f"{limit:.2f} {get_quote_currency()}", inline=True)
 
         await self._send(embed)
 
