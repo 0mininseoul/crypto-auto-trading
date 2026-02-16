@@ -124,8 +124,14 @@ class BitgetWebSocket:
                 msg = await self._ws.receive(timeout=WS_PING_INTERVAL + 10)
 
                 if msg.type == aiohttp.WSMsgType.TEXT:
-                    data = json.loads(msg.data)
-                    await self._handle_message(data)
+                    # Bitget pong 응답 처리 (JSON 아님)
+                    if msg.data == "pong":
+                        continue
+                    try:
+                        data = json.loads(msg.data)
+                        await self._handle_message(data)
+                    except json.JSONDecodeError:
+                        logger.debug(f"JSON 파싱 스킵 (비JSON 메시지): {msg.data[:50]}")
 
                 elif msg.type == aiohttp.WSMsgType.PING:
                     await self._ws.pong()
