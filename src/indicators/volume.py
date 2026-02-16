@@ -44,15 +44,22 @@ def add_volume_indicators(df: pd.DataFrame, period: int = VOLUME_MA_PERIOD) -> p
     return df
 
 
-def is_volume_above_average(df: pd.DataFrame, row_idx: int = -1) -> bool:
-    """현재 거래량이 14MA 평균 이상인지 확인"""
+def is_volume_above_average(df: pd.DataFrame, row_idx: int = -1, threshold: float = 1.0) -> bool:
+    """
+    현재 거래량이 14MA의 일정 비율 이상인지 확인
+
+    Args:
+        df: 데이터프레임
+        row_idx: 확인할 행 인덱스
+        threshold: 기준 비율 (1.0 = 평균, 0.7 = 평균의 70%)
+    """
     if "volume_ma" not in df.columns:
         return False
     row = df.iloc[row_idx]
     vol_ma = row.get("volume_ma", 0)
     if pd.isna(vol_ma) or vol_ma == 0:
         return False
-    return row["volume"] > vol_ma
+    return row["volume"] > (vol_ma * threshold)
 
 
 def is_volume_too_low(df: pd.DataFrame, threshold: float = 0.5, row_idx: int = -1) -> bool:

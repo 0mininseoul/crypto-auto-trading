@@ -79,7 +79,8 @@ CONSECUTIVE_LOSS_COOLDOWN = {
 # 진입 회피 조건
 # ============================================
 EXTREME_VOLATILITY_MULTIPLIER = 3.0  # 24시간 변동성 > 평균 3배
-LOW_VOLUME_THRESHOLD = 0.5           # 거래량 < 14MA의 50%
+LOW_VOLUME_THRESHOLD = 0.3           # 거래량 < 14MA의 30% (진입 회피)
+ENTRY_VOLUME_THRESHOLD = 0.7         # 거래량 > 14MA의 70% (진입 필수)
 MIN_RR_RATIO = 1.5                   # 최소 손익비
 
 # ============================================

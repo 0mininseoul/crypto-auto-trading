@@ -42,7 +42,7 @@ from src.indicators.volume import (
     is_obv_trending_up,
     is_obv_trending_down,
 )
-from src.config.constants import MIN_RR_RATIO, MAX_STOP_LOSS_PERCENT, STOP_LOSS_BUFFER_PERCENT, MACD_HISTOGRAM_MODE
+from src.config.constants import MIN_RR_RATIO, MAX_STOP_LOSS_PERCENT, STOP_LOSS_BUFFER_PERCENT, MACD_HISTOGRAM_MODE, ENTRY_VOLUME_THRESHOLD
 from src.utils.logger import setup_logger
 
 logger = setup_logger("signals")
@@ -90,7 +90,7 @@ def check_long_entry(
     필수 조건 (3개 모두 충족):
     1. [추세] 1시간봉 EMA 50 위에 가격 + EMA 9 > EMA 50
     2. [모멘텀] 15분봉 RSI > 40 + MACD 히스토그램 상승 전환
-    3. [거래량] 15분봉 거래량 > 14MA
+    3. [거래량] 15분봉 거래량 > 14MA의 70%
 
     추가 조건 (1개 이상 충족):
     1. [EMA] 5분봉 EMA 9 > EMA 21 (단기 정배열)
@@ -151,14 +151,14 @@ def check_long_entry(
     else:
         reasons.append(f"❌ [필수] 15분봉 모멘텀 부족 (RSI>40: {rsi_ok}, MACD↑: {macd_ok})")
 
-    # 3. [거래량] 15분봉 거래량 > 14MA
+    # 3. [거래량] 15분봉 거래량 > 14MA의 70%
     # 주의: 현재 진행 중인 캔들(row_idx=-1)이 아닌 직전 마감 캔들(row_idx=-2)을 기준으로 비교해야 함
     # 15분봉 진행 중에는 거래량이 계속 누적되므로, 마감된 캔들의 거래량으로 확정된 신호를 판단함.
-    if is_volume_above_average(df_15m, row_idx=-2):
+    if is_volume_above_average(df_15m, row_idx=-2, threshold=ENTRY_VOLUME_THRESHOLD):
         mandatory_count += 1
-        reasons.append("✅ [필수] 15분봉(직전) 거래량 > 14MA 평균")
+        reasons.append(f"✅ [필수] 15분봉(직전) 거래량 > 14MA의 {ENTRY_VOLUME_THRESHOLD:.0%}")
     else:
-        reasons.append("❌ [필수] 15분봉(직전) 거래량 부족")
+        reasons.append(f"❌ [필수] 15분봉(직전) 거래량 부족 (< {ENTRY_VOLUME_THRESHOLD:.0%})")
 
     # === 추가 조건 ===
 
@@ -238,7 +238,7 @@ def check_short_entry(
     필수 조건 (3개 모두 충족):
     1. [추세] 1시간봉 EMA 50 아래에 가격 + EMA 9 < EMA 50
     2. [모멘텀] 15분봉 RSI < 60 + MACD 히스토그램 하락 전환
-    3. [거래량] 15분봉 거래량 > 14MA
+    3. [거래량] 15분봉 거래량 > 14MA의 70%
 
     추가 조건 (1개 이상 충족):
     1. [EMA] 5분봉 EMA 9 < EMA 21 (단기 역배열)
@@ -299,13 +299,13 @@ def check_short_entry(
     else:
         reasons.append(f"❌ [필수] 15분봉 모멘텀 부족 (RSI<60: {rsi_ok}, MACD↓: {macd_ok})")
 
-    # 3. [거래량] 15분봉 거래량 > 14MA
+    # 3. [거래량] 15분봉 거래량 > 14MA의 70%
     # 주의: 현재 진행 중인 캔들(row_idx=-1)이 아닌 직전 마감 캔들(row_idx=-2)을 기준으로 비교해야 함
-    if is_volume_above_average(df_15m, row_idx=-2):
+    if is_volume_above_average(df_15m, row_idx=-2, threshold=ENTRY_VOLUME_THRESHOLD):
         mandatory_count += 1
-        reasons.append("✅ [필수] 15분봉(직전) 거래량 > 14MA 평균")
+        reasons.append(f"✅ [필수] 15분봉(직전) 거래량 > 14MA의 {ENTRY_VOLUME_THRESHOLD:.0%}")
     else:
-        reasons.append("❌ [필수] 15분봉(직전) 거래량 부족")
+        reasons.append(f"❌ [필수] 15분봉(직전) 거래량 부족 (< {ENTRY_VOLUME_THRESHOLD:.0%})")
 
     # === 추가 조건 ===
 
