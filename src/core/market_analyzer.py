@@ -228,8 +228,9 @@ class MarketAnalyzer:
             if min(ema50, ema200) < h_price < max(ema50, ema200):
                 reasons.append("1시간봉 EMA50-200 사이 (불확실 구간)")
 
-        # 3. 거래량 부족
-        if is_volume_too_low(df_15m, threshold=LOW_VOLUME_THRESHOLD):
+        # 3. 거래량 부족 (직전 마감 캔들 기준)
+        # 현재 진행 중인 캔들(row_idx=-1)은 거래량이 0부터 시작하므로 항상 "부족"으로 오판됨
+        if is_volume_too_low(df_15m, threshold=LOW_VOLUME_THRESHOLD, row_idx=-2):
             reasons.append("거래량 < 14MA의 50%")
 
         return {
