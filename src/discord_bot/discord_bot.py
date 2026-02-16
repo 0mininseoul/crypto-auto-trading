@@ -11,6 +11,7 @@ from discord import app_commands
 
 from src.config.settings import get_settings
 from src.discord_bot.notifier import get_notifier
+from src.utils.helpers import kst_now
 from src.utils.logger import setup_logger
 
 logger = setup_logger("discord_bot")
