@@ -116,7 +116,7 @@ class BotStatusRepository:
     @staticmethod
     def update_status(
         status: Optional[BotState] = None,
-        trading_mode: Optional[TradingMode] = None,
+        trading_mode: Optional[TradingMode | str] = None,
         current_position: Optional[Dict] = None,
     ) -> bool:
         """봇 상태 업데이트"""
@@ -129,9 +129,9 @@ class BotStatusRepository:
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         if status:
-            updates["status"] = status.value
+            updates["status"] = status.value if hasattr(status, 'value') else status
         if trading_mode:
-            updates["trading_mode"] = trading_mode.value
+            updates["trading_mode"] = trading_mode.value if hasattr(trading_mode, 'value') else trading_mode
         if current_position is not None:
             updates["current_position"] = current_position
 
