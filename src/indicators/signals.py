@@ -150,11 +150,13 @@ def check_long_entry(
         reasons.append(f"❌ [필수] 15분봉 모멘텀 부족 (RSI>40: {rsi_ok}, MACD↑: {macd_ok})")
 
     # 3. [거래량] 15분봉 거래량 > 14MA
-    if is_volume_above_average(df_15m):
+    # 주의: 현재 진행 중인 캔들(row_idx=-1)이 아닌 직전 마감 캔들(row_idx=-2)을 기준으로 비교해야 함
+    # 15분봉 진행 중에는 거래량이 계속 누적되므로, 마감된 캔들의 거래량으로 확정된 신호를 판단함.
+    if is_volume_above_average(df_15m, row_idx=-2):
         mandatory_count += 1
-        reasons.append("✅ [필수] 15분봉 거래량 > 14MA 평균")
+        reasons.append("✅ [필수] 15분봉(직전) 거래량 > 14MA 평균")
     else:
-        reasons.append("❌ [필수] 15분봉 거래량 부족")
+        reasons.append("❌ [필수] 15분봉(직전) 거래량 부족")
 
     # === 추가 조건 ===
 
@@ -294,11 +296,12 @@ def check_short_entry(
         reasons.append(f"❌ [필수] 15분봉 모멘텀 부족 (RSI<60: {rsi_ok}, MACD↓: {macd_ok})")
 
     # 3. [거래량] 15분봉 거래량 > 14MA
-    if is_volume_above_average(df_15m):
+    # 주의: 현재 진행 중인 캔들(row_idx=-1)이 아닌 직전 마감 캔들(row_idx=-2)을 기준으로 비교해야 함
+    if is_volume_above_average(df_15m, row_idx=-2):
         mandatory_count += 1
-        reasons.append("✅ [필수] 15분봉 거래량 > 14MA 평균")
+        reasons.append("✅ [필수] 15분봉(직전) 거래량 > 14MA 평균")
     else:
-        reasons.append("❌ [필수] 15분봉 거래량 부족")
+        reasons.append("❌ [필수] 15분봉(직전) 거래량 부족")
 
     # === 추가 조건 ===
 

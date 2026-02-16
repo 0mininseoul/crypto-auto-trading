@@ -171,7 +171,17 @@ class TradingBot:
                 self._risk.record_api_error()
                 await self._notifier.notify_error(str(e))
 
-            await asyncio.sleep(ANALYSIS_INTERVAL)
+            # 다음 캔들 마감까지 대기 (5분 단위 정각 + 2초)
+            # 예: 12:00:00 → 12:05:02에 분석 실행
+            now = datetime.now(timezone.utc)
+            next_timestamp = (now.timestamp() // 300 + 1) * 300  # 다음 5분 단위 시각
+            sleep_duration = next_timestamp - now.timestamp() + 2  # 2초 버퍼 (데이터 수신 지연 고려)
+            
+            if sleep_duration < 0:
+                sleep_duration = 0
+            
+            logger.info(f"⏳ 다음 캔들 마감 대기: {sleep_duration:.1f}초 후 분석")
+            await asyncio.sleep(sleep_duration)
 
     async def _position_monitor_loop(self):
         """1분 주기 포지션 모니터링 (SL/TP/트레일링)"""
