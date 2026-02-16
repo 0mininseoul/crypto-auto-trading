@@ -8,7 +8,9 @@ from typing import Optional, List, Dict, Any
 import ccxt.async_support as ccxt
 
 from src.config.settings import get_settings
-from src.config.constants import CCXT_SYMBOL, MARGIN_MODE, DEFAULT_LEVERAGE
+from src.config.constants import (
+    CCXT_SYMBOL, DEMO_CCXT_SYMBOL, MARGIN_MODE, DEFAULT_LEVERAGE
+)
 from src.utils.logger import setup_logger
 
 logger = setup_logger("bitget_client")
@@ -22,9 +24,17 @@ class BitgetClient:
         self._exchange: Optional[ccxt.bitget] = None
         self._settings = settings
 
+    @property
+    def symbol(self) -> str:
+        """현재 모드에 맞는 심볼 반환"""
+        if self._settings.use_sandbox:
+            return DEMO_CCXT_SYMBOL
+        return CCXT_SYMBOL
+
     async def _get_exchange(self) -> ccxt.bitget:
         """ccxt 거래소 인스턴스 (lazy init)"""
         if self._exchange is None:
+            # 기존 API 키 사용 (데모/라이브 동일)
             config = {
                 "apiKey": self._settings.bitget_api_key,
                 "secret": self._settings.bitget_secret_key,
@@ -36,10 +46,11 @@ class BitgetClient:
                 "enableRateLimit": True,
             }
 
-            # NOTE: API 키가 라이브용이므로 sandbox=True 사용하지 않음
-            # 데모 모드의 안전장치는 주문 실행 단계에서 소프트웨어로 제어
+            # 데모 트레이딩 모드 (Bitget paptrading)
             if self._settings.is_demo:
-                logger.info("🔧 데모 모드 (주문 실행 차단, 시장 데이터만 조회)")
+                # Bitget 데모 모드: 헤더에 paptrading=1 추가
+                config["options"]["headers"] = {"PAPTRADING": "1"}
+                logger.info(f"🧪 데모 트레이딩 모드 — 심볼: {self.symbol}")
             else:
                 logger.warning("⚠️  라이브(Live) 모드 — 실제 주문 실행됨!")
 
@@ -77,7 +88,7 @@ class BitgetClient:
 
     async def get_ohlcv(
         self,
-        symbol: str = CCXT_SYMBOL,
+        symbol: Optional[str] = None,
         timeframe: str = "4h",
         limit: int = 200,
         since: Optional[int] = None,
@@ -88,6 +99,8 @@ class BitgetClient:
         Returns:
             [[timestamp, open, high, low, close, volume], ...]
         """
+        if symbol is None:
+            symbol = self.symbol
         exchange = await self._get_exchange()
         try:
             ohlcv = await exchange.fetch_ohlcv(
@@ -99,8 +112,10 @@ class BitgetClient:
             logger.error(f"OHLCV 조회 실패: {e}")
             raise
 
-    async def get_ticker(self, symbol: str = CCXT_SYMBOL) -> Dict[str, Any]:
+    async def get_ticker(self, symbol: Optional[str] = None) -> Dict[str, Any]:
         """현재 시세 조회"""
+        if symbol is None:
+            symbol = self.symbol
         exchange = await self._get_exchange()
         try:
             ticker = await exchange.fetch_ticker(symbol)
@@ -120,8 +135,10 @@ class BitgetClient:
 
     # === 포지션 ===
 
-    async def get_positions(self, symbol: str = CCXT_SYMBOL) -> List[Dict]:
+    async def get_positions(self, symbol: Optional[str] = None) -> List[Dict]:
         """현재 포지션 조회"""
+        if symbol is None:
+            symbol = self.symbol
         exchange = await self._get_exchange()
         try:
             positions = await exchange.fetch_positions([symbol])
@@ -144,17 +161,21 @@ class BitgetClient:
             logger.error(f"포지션 조회 실패: {e}")
             raise
 
-    async def has_open_position(self, symbol: str = CCXT_SYMBOL) -> bool:
+    async def has_open_position(self, symbol: Optional[str] = None) -> bool:
         """포지션 존재 여부"""
+        if symbol is None:
+            symbol = self.symbol
         positions = await self.get_positions(symbol)
         return len(positions) > 0
 
     # === 주문 ===
 
     async def set_leverage(
-        self, leverage: int = DEFAULT_LEVERAGE, symbol: str = CCXT_SYMBOL
+        self, leverage: int = DEFAULT_LEVERAGE, symbol: Optional[str] = None
     ):
         """레버리지 설정"""
+        if symbol is None:
+            symbol = self.symbol
         exchange = await self._get_exchange()
         try:
             await exchange.set_leverage(leverage, symbol)
@@ -163,9 +184,11 @@ class BitgetClient:
             logger.warning(f"레버리지 설정 실패 (이미 설정됨일 수 있음): {e}")
 
     async def set_margin_mode(
-        self, mode: str = MARGIN_MODE, symbol: str = CCXT_SYMBOL
+        self, mode: str = MARGIN_MODE, symbol: Optional[str] = None
     ):
         """마진 모드 설정"""
+        if symbol is None:
+            symbol = self.symbol
         exchange = await self._get_exchange()
         try:
             await exchange.set_margin_mode(mode, symbol)
@@ -177,7 +200,7 @@ class BitgetClient:
         self,
         side: str,
         amount: float,
-        symbol: str = CCXT_SYMBOL,
+        symbol: Optional[str] = None,
         params: Optional[Dict] = None,
     ) -> Dict:
         """
@@ -186,22 +209,12 @@ class BitgetClient:
         Args:
             side: 'buy' (롱 진입/숏 청산) 또는 'sell' (숏 진입/롱 청산)
             amount: 수량 (BTC)
-            symbol: 심볼
+            symbol: 심볼 (기본값: 현재 모드에 맞는 심볼)
             params: 추가 파라미터 (TP/SL 등)
         """
-        # 데모 모드 안전장치
-        if self._settings.is_demo:
-            ticker = await self.get_ticker(symbol)
-            logger.info(f"🔧 [데모] 시장가 주문 시뮬레이션: {side} {amount} @ {ticker['last']}")
-            return {
-                "id": f"demo_{int(asyncio.get_event_loop().time()*1000)}",
-                "symbol": symbol,
-                "side": side,
-                "amount": amount,
-                "price": ticker["last"],
-                "status": "closed",
-                "demo": True,
-            }
+        # 심볼 기본값 설정
+        if symbol is None:
+            symbol = self.symbol
 
         exchange = await self._get_exchange()
         try:
@@ -232,10 +245,12 @@ class BitgetClient:
         side: str,
         amount: float,
         price: float,
-        symbol: str = CCXT_SYMBOL,
+        symbol: Optional[str] = None,
         params: Optional[Dict] = None,
     ) -> Dict:
         """지정가 주문"""
+        if symbol is None:
+            symbol = self.symbol
         exchange = await self._get_exchange()
         try:
             order = await exchange.create_order(
@@ -259,8 +274,10 @@ class BitgetClient:
             logger.error(f"지정가 주문 실패: {e}")
             raise
 
-    async def cancel_order(self, order_id: str, symbol: str = CCXT_SYMBOL) -> bool:
+    async def cancel_order(self, order_id: str, symbol: Optional[str] = None) -> bool:
         """주문 취소"""
+        if symbol is None:
+            symbol = self.symbol
         exchange = await self._get_exchange()
         try:
             await exchange.cancel_order(order_id, symbol)
@@ -271,7 +288,7 @@ class BitgetClient:
             return False
 
     async def close_position(
-        self, side: str, amount: float, symbol: str = CCXT_SYMBOL
+        self, side: str, amount: float, symbol: Optional[str] = None
     ) -> Dict:
         """
         포지션 청산 (시장가)
@@ -280,6 +297,8 @@ class BitgetClient:
             side: 'long' → sell, 'short' → buy
             amount: 청산 수량
         """
+        if symbol is None:
+            symbol = self.symbol
         close_side = "sell" if side == "long" else "buy"
         params = {"reduceOnly": True}
         return await self.place_market_order(close_side, amount, symbol, params)

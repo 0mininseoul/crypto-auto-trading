@@ -267,6 +267,65 @@ def _register_commands(tree: app_commands.CommandTree, settings):
         except Exception as e:
             await interaction.response.send_message(f"❌ 오류: {e}")
 
+    # ━━━ /mode (Admin) ━━━
+    @tree.command(name="mode", description="[Admin] 거래 모드 조회/전환 (demo/live)")
+    @app_commands.describe(new_mode="전환할 모드 (demo 또는 live). 생략 시 현재 모드 조회")
+    async def cmd_mode(interaction: discord.Interaction, new_mode: str = None):
+        if not _is_admin(interaction):
+            await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
+            return
+
+        await interaction.response.defer()
+        try:
+            from src.config.settings import get_settings
+            from src.config.constants import CCXT_SYMBOL, DEMO_CCXT_SYMBOL
+
+            current_settings = get_settings()
+
+            if new_mode is None:
+                # 현재 모드 조회
+                mode = current_settings.trading_mode.upper()
+                symbol = DEMO_CCXT_SYMBOL if current_settings.is_demo else CCXT_SYMBOL
+
+                if current_settings.is_demo:
+                    mode_desc = "🧪 데모 트레이딩 (가상 자금)"
+                else:
+                    mode_desc = "🔴 라이브 (실거래)"
+
+                embed = discord.Embed(
+                    title="🔀 거래 모드",
+                    color=0x00FF88 if current_settings.is_demo else 0xFF4444,
+                )
+                embed.add_field(name="현재 모드", value=mode, inline=True)
+                embed.add_field(name="유형", value=mode_desc, inline=True)
+                embed.add_field(name="심볼", value=symbol, inline=True)
+                embed.set_footer(text="모드 전환: /mode demo 또는 /mode live")
+                await interaction.followup.send(embed=embed)
+            else:
+                # 모드 전환 (환경변수는 런타임에 변경 불가, DB에 저장하여 관리)
+                new_mode = new_mode.lower()
+                if new_mode not in ["demo", "live"]:
+                    await interaction.followup.send("❌ 유효하지 않은 모드입니다. `demo` 또는 `live`를 입력하세요.")
+                    return
+
+                from src.database.repository import BotStatusRepository
+                from src.config.settings import set_trading_mode
+
+                # DB와 런타임 설정 모두 업데이트
+                BotStatusRepository.update_status(trading_mode=new_mode)
+                set_trading_mode(new_mode)
+
+                if new_mode == "demo":
+                    msg = "🧪 **데모 트레이딩 모드**로 전환되었습니다.\n심볼: `SBTC/SUSDT:SUSDT`\n가상 자금 3000 SUSDT로 거래됩니다."
+                else:
+                    msg = "🔴 **라이브 모드**로 전환되었습니다.\n⚠️ 실제 자금으로 거래됩니다!"
+
+                await interaction.followup.send(msg)
+                logger.info(f"거래 모드 변경: {new_mode.upper()}")
+
+        except Exception as e:
+            await interaction.followup.send(f"❌ 오류: {e}")
+
 
 async def run_discord_bot():
     """Discord 봇 실행 (별도 태스크)"""

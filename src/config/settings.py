@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     """전체 앱 설정"""
 
     # --- Bitget API ---
+    # 동일한 API 키로 데모/라이브 모두 사용 (헤더로 구분)
     bitget_api_key: str = Field(default="", alias="BITGET_API_KEY")
     bitget_secret_key: str = Field(default="", alias="BITGET_SECRET_KEY")
     bitget_passphrase: str = Field(default="", alias="BITGET_PASSPHRASE")
@@ -57,3 +58,16 @@ def get_settings() -> Settings:
     if _settings is None:
         _settings = Settings()
     return _settings
+
+
+def set_trading_mode(mode: str) -> None:
+    """런타임에서 거래 모드 변경 (demo/live)"""
+    global _settings
+    if _settings is not None:
+        # Pydantic 모델은 immutable이므로 새 인스턴스 생성
+        _settings = Settings(
+            **{
+                **_settings.model_dump(),
+                "trading_mode": mode,
+            }
+        )

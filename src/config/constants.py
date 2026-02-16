@@ -10,6 +10,11 @@ SYMBOL = "BTCUSDT"
 CCXT_SYMBOL = "BTC/USDT:USDT"
 PRODUCT_TYPE = "USDT-FUTURES"
 
+# 테스트넷 (Demo) 심볼
+DEMO_SYMBOL = "SBTCSUSDT"
+DEMO_CCXT_SYMBOL = "SBTC/SUSDT:SUSDT"
+DEMO_PRODUCT_TYPE = "SUSDT-FUTURES"
+
 # 타임프레임
 TIMEFRAMES = {
     "main": "4h",       # 메인 분석
@@ -88,6 +93,10 @@ API_ERROR_STREAK_LIMIT = 3           # API 오류 3회 연속
 # ============================================
 BITGET_WS_PUBLIC_URL = "wss://ws.bitget.com/v2/ws/public"
 BITGET_WS_PRIVATE_URL = "wss://ws.bitget.com/v2/ws/private"
+
+# 테스트넷 (Demo) WebSocket
+DEMO_WS_PUBLIC_URL = "wss://ws.bitget.com/v2/ws/public/demo"
+DEMO_WS_PRIVATE_URL = "wss://ws.bitget.com/v2/ws/private/demo"
 WS_PING_INTERVAL = 25               # 초 단위
 WS_RECONNECT_DELAY = 1              # 초기 재연결 대기
 WS_RECONNECT_MAX_DELAY = 60         # 최대 재연결 대기
