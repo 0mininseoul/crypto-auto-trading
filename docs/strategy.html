@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bitget BTC 선물 자동매매 - 트레이딩 전략 설계서</title>
+  <meta name="description" content="Bitget BTC 선물 자동매매 에이전트의 핵심 트레이딩 전략 파라미터 문서">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #1c2129;
+      --bg-code: #1a1f2b;
+      --border: #30363d;
+      --border-highlight: #58a6ff33;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --text-muted: #6e7681;
+      --accent-blue: #58a6ff;
+      --accent-green: #3fb950;
+      --accent-orange: #d29922;
+      --accent-red: #f85149;
+      --accent-purple: #bc8cff;
+      --accent-gradient: linear-gradient(135deg, #58a6ff, #bc8cff);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Noto Sans KR', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.75;
+      min-height: 100vh;
+    }
+
+    /* Top accent bar */
+    body::before {
+      content: '';
+      display: block;
+      height: 3px;
+      background: var(--accent-gradient);
+    }
+
+    /* Header */
+    .site-header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+      background: rgba(22, 27, 34, 0.85);
+    }
+
+    .header-inner {
+      max-width: 920px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--accent-gradient);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .header-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .header-subtitle {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .header-meta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--accent-green);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      background: var(--accent-green);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .last-updated {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Main content */
+    .content-wrapper {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    /* Typography */
+    #content h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.02em;
+    }
+
+    #content h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-top: 48px;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+
+    #content h2::before {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      width: 60px;
+      height: 2px;
+      background: var(--accent-gradient);
+      border-radius: 1px;
+    }
+
+    #content h3 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--accent-blue);
+      margin-top: 32px;
+      margin-bottom: 14px;
+    }
+
+    #content h4 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--accent-purple);
+      margin-top: 24px;
+      margin-bottom: 10px;
+    }
+
+    #content p {
+      margin-bottom: 14px;
+      color: var(--text-secondary);
+    }
+
+    #content strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    /* Blockquotes */
+    #content blockquote {
+      border-left: 3px solid var(--accent-blue);
+      background: rgba(88, 166, 255, 0.06);
+      padding: 12px 20px;
+      margin: 16px 0;
+      border-radius: 0 8px 8px 0;
+      color: var(--text-secondary);
+    }
+
+    #content blockquote strong {
+      color: var(--accent-blue);
+    }
+
+    /* Tables */
+    #content table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin: 16px 0 24px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+
+    #content thead {
+      background: var(--bg-tertiary);
+    }
+
+    #content th {
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    #content td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    #content tr:last-child td {
+      border-bottom: none;
+    }
+
+    #content tbody tr {
+      transition: background 0.15s;
+    }
+
+    #content tbody tr:hover {
+      background: rgba(88, 166, 255, 0.04);
+    }
+
+    /* Code blocks */
+    #content pre {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 22px;
+      margin: 14px 0 20px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      line-height: 1.65;
+    }
+
+    #content pre code {
+      font-family: 'JetBrains Mono', 'Consolas', monospace;
+      color: var(--text-secondary);
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      font-size: inherit;
+    }
+
+    #content code {
+      font-family: 'JetBrains Mono', 'Consolas', monospace;
+      background: var(--bg-tertiary);
+      padding: 2px 7px;
+      border-radius: 5px;
+      font-size: 0.85em;
+      color: var(--accent-orange);
+    }
+
+    /* Horizontal rules */
+    #content hr {
+      border: none;
+      height: 1px;
+      background: var(--border);
+      margin: 40px 0;
+    }
+
+    /* Lists */
+    #content ul, #content ol {
+      margin: 10px 0 16px 20px;
+      color: var(--text-secondary);
+    }
+
+    #content li {
+      margin-bottom: 6px;
+    }
+
+    #content li strong {
+      color: var(--text-primary);
+    }
+
+    /* Emphasis text */
+    #content em {
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+
+    /* Footer */
+    .site-footer {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 24px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .content-wrapper {
+        padding: 24px 16px 60px;
+      }
+
+      #content h1 {
+        font-size: 1.5rem;
+      }
+
+      #content h2 {
+        font-size: 1.2rem;
+      }
+
+      #content table {
+        font-size: 0.8rem;
+      }
+
+      #content th, #content td {
+        padding: 8px 10px;
+      }
+
+      .header-meta {
+        display: none;
+      }
+    }
+
+    /* Loading animation */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 60vh;
+      gap: 8px;
+    }
+
+    .loading-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-blue);
+      animation: bounce 1.4s infinite ease-in-out both;
+    }
+
+    .loading-dot:nth-child(1) { animation-delay: -0.32s; }
+    .loading-dot:nth-child(2) { animation-delay: -0.16s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="header-badge">
+        <div class="header-icon">₿</div>
+        <div>
+          <div class="header-title">Crypto Auto Trading</div>
+          <div class="header-subtitle">트레이딩 전략 설계서</div>
+        </div>
+      </div>
+      <div class="header-meta">
+        <div class="header-status">
+          <span class="status-dot"></span>
+          <span>Active Strategy</span>
+        </div>
+        <span class="last-updated">v1.0.0</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="content-wrapper">
+    <div id="content">
+      <div class="loading">
+        <div class="loading-dot"></div>
+        <div class="loading-dot"></div>
+        <div class="loading-dot"></div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    Bitget BTC 선물 자동매매 &middot; Trading Strategy Document
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    const markdown = `# Bitget BTC 선물 자동매매 - 트레이딩 전략 설계서
+
+> **이 문서는 자동매매 에이전트의 핵심 전략 파라미터입니다.**
+> **운영 중 언제든 수정 가능하며, 에이전트는 이 설정을 실시간으로 참조합니다.**
+
+---
+
+## 1. 트레이딩 핵심 전략 (Trading Logic)
+
+### 1.1 기본 설정
+
+| 항목 | 설정값 | 설명 |
+|------|--------|------|
+| **거래 자산** | BTCUSDT | 비트코인 USDT 무기한 선물 |
+| **거래소** | Bitget Futures | 비트겟 선물 거래소 |
+| **기본 타임프레임** | 4시간봉 | 메인 분석 시간대 |
+| **참조 타임프레임** | 1일봉, 1시간봉, 15분봉 | 다중 시간대 분석 |
+| **거래 유형** | 스윙 트레이딩 | 수일 ~ 수주 보유 |
+
+### 1.2 사용 보조지표
+
+| 지표 | 설정값 | 용도 |
+|------|--------|------|
+| **EMA (지수이동평균)** | 13, 21, 50, 200 | 추세 확인 및 지지/저항 |
+| **RSI** | 14 | 과매수/과매도, 다이버전스 |
+| **MACD** | 12, 26, 9 | 모멘텀 및 크로스오버 |
+| **OBV** | 기본값 | 거래량 기반 매집/분배 확인 |
+| **거래량 MA** | 14 | 평균 거래량 비교 |
+
+### 1.3 롱 포지션 진입 조건
+
+> **모든 필수 조건 충족 + 추가 확인 2개 이상 시 진입**
+
+#### 필수 조건 (AND 조건)
+
+\`\`\`
+1. [추세] 1일봉 EMA 50 위에 가격 위치
+2. [추세] 4시간봉 EMA 13 > EMA 21 > EMA 50 (정배열)
+3. [구조] 이전 스윙 로우보다 현재 저점이 높음 (Higher Low)
+4. [거래량] 진입 캔들 거래량 > 14MA 평균
+\`\`\`
+
+#### 추가 확인 조건 (2개 이상 충족)
+
+\`\`\`
+1. [RSI] RSI 상승 다이버전스 발생 (가격 저점↓, RSI 저점↑)
+2. [RSI] RSI 30 이하에서 반등 후 40 돌파
+3. [MACD] MACD 히스토그램 양전환 또는 골든크로스
+4. [OBV] OBV 상승 추세 유지
+5. [캔들] 해머형, 장악형, 모닝스타 등 반전 캔들 출현
+6. [구조] 저항선 돌파 후 지지로 리테스트 성공
+\`\`\`
+
+#### 진입 트리거
+
+\`\`\`
+- 4시간봉 캔들이 EMA 21 위에서 종가 마감
+- 또는 저항선 돌파 + 다음 캔들 시가가 저항 위에서 시작
+\`\`\`
+
+### 1.4 숏 포지션 진입 조건
+
+> **모든 필수 조건 충족 + 추가 확인 2개 이상 시 진입**
+
+#### 필수 조건 (AND 조건)
+
+\`\`\`
+1. [추세] 1일봉 EMA 50 아래에 가격 위치
+2. [추세] 4시간봉 EMA 13 < EMA 21 < EMA 50 (역배열)
+3. [구조] 이전 스윙 하이보다 현재 고점이 낮음 (Lower High)
+4. [거래량] 진입 캔들 거래량 > 14MA 평균
+\`\`\`
+
+#### 추가 확인 조건 (2개 이상 충족)
+
+\`\`\`
+1. [RSI] RSI 하락 다이버전스 발생 (가격 고점↑, RSI 고점↓)
+2. [RSI] RSI 70 이상에서 하락 후 60 하향 돌파
+3. [MACD] MACD 히스토그램 음전환 또는 데드크로스
+4. [OBV] OBV 하락 추세 유지
+5. [캔들] 슈팅스타, 하락장악형, 이브닝스타 등 반전 캔들 출현
+6. [구조] 지지선 붕괴 후 저항으로 리테스트 실패
+\`\`\`
+
+#### 진입 트리거
+
+\`\`\`
+- 4시간봉 캔들이 EMA 21 아래에서 종가 마감
+- 또는 지지선 붕괴 + 다음 캔들 시가가 지지 아래에서 시작
+\`\`\`
+
+### 1.5 청산 조건
+
+#### 익절 (Take Profit)
+
+| 방식 | 조건 | 비율 |
+|------|------|------|
+| **1차 익절** | R:R 1.5:1 도달 | 포지션 50% |
+| **2차 익절** | R:R 2.5:1 도달 | 포지션 30% |
+| **최종 익절** | 반전 신호 또는 R:R 4:1 | 잔여 20% |
+
+#### 반전 신호 청산
+
+\`\`\`
+- 반대 방향 EMA 크로스오버 (데드/골든크로스)
+- RSI 반대 다이버전스 발생
+- 강한 거래량과 함께 반대 방향 장악형 캔들
+- MACD 반대 크로스오버
+\`\`\`
+
+#### 손절 (Stop Loss)
+
+\`\`\`
+- 진입 시 설정한 무효화 지점(Invalidation Level) 도달
+- 기본: 진입가 대비 스윙 로우/하이 + 버퍼(0.5%)
+\`\`\`
+
+### 1.6 진입 회피 조건
+
+> **아래 조건 중 하나라도 해당 시 진입하지 않음**
+
+\`\`\`
+1. [변동성] 최근 24시간 변동성이 평균의 3배 이상 (급등락 구간)
+2. [추세] 1일봉 EMA 50과 200 사이에 가격 위치 (불확실 구간)
+3. [거래량] 최근 4시간 평균 거래량이 14MA의 50% 미만
+4. [구조] 명확한 지지/저항 구간 없음 (횡보장)
+5. [손익비] 예상 R:R이 1.5:1 미만
+6. [기존 포지션] 이미 최대 동시 포지션 수 도달
+\`\`\`
+
+---
+
+## 2. 리스크 및 자금 관리 (Risk Management)
+
+### 2.1 자본 관리
+
+| 항목 | 설정값 | 설명 |
+|------|--------|------|
+| **1회 최대 리스크** | 2% | 1회 거래당 최대 손실 허용 비율 |
+| **1일 최대 손실** | 5% | 일일 최대 손실 한도 (도달 시 당일 거래 중단) |
+| **주간 최대 손실** | 10% | 주간 최대 손실 한도 (도달 시 주간 거래 중단) |
+| **총 자본 보호** | 70% | 총 자본의 30% 손실 시 시스템 완전 중단 |
+
+### 2.2 레버리지 설정
+
+| 항목 | 설정값 | 설명 |
+|------|--------|------|
+| **기본 레버리지** | 5x | 일반 시장 상황 |
+| **저변동성 레버리지** | 10x | ATR 기준 낮은 변동성 |
+| **고변동성 레버리지** | 3x | ATR 기준 높은 변동성 |
+| **마진 모드** | 격리 (Isolated) | 포지션별 마진 분리 |
+
+### 2.3 포지션 사이징
+
+\`\`\`
+포지션 크기 = (계좌 잔고 × 리스크 비율) ÷ (진입가 - 스탑로스가)
+
+예시:
+- 계좌 잔고: $10,000
+- 리스크 비율: 2% = $200
+- 진입가: $50,000
+- 스탑로스가: $49,000 (2% 하락)
+- 포지션 크기: $200 ÷ $1,000 = 0.2 BTC
+- 레버리지 5x 적용 시 필요 마진: $2,000
+\`\`\`
+
+### 2.4 손절 설정 규칙
+
+| 조건 | 손절 위치 | 설명 |
+|------|----------|------|
+| **기본** | 스윙 로우/하이 + 0.5% 버퍼 | 기술적 무효화 지점 |
+| **최대** | 진입가 대비 3% | 어떤 경우에도 초과 금지 |
+| **트레일링** | 고점/저점 대비 1.5% | 수익 보호용 |
+
+### 2.5 익절 설정 규칙
+
+| 단계 | 조건 | 청산 비율 | 남은 포지션 처리 |
+|------|------|----------|-----------------|
+| **1단계** | R:R 1.5:1 도달 | 50% | 손절을 본전으로 이동 |
+| **2단계** | R:R 2.5:1 도달 | 30% | 트레일링 스탑 활성화 |
+| **3단계** | 반전 신호 또는 R:R 4:1 | 잔여 전량 | - |
+
+### 2.6 거래 제한
+
+| 항목 | 설정값 | 설명 |
+|------|--------|------|
+| **최대 동시 포지션** | 1개 | 동시에 열 수 있는 포지션 수 |
+| **1일 최대 거래** | 3회 | 일일 최대 진입 횟수 |
+| **연속 손실 후 대기** | 3회 연속 손실 시 24시간 | 냉각 기간 |
+| **주간 최대 거래** | 10회 | 주간 최대 진입 횟수 |
+
+### 2.7 긴급 중단 조건
+
+> **아래 조건 발생 시 모든 포지션 즉시 청산 + 신규 거래 중단**
+
+\`\`\`
+1. [손실] 1일 최대 손실(5%) 도달
+2. [손실] 주간 최대 손실(10%) 도달
+3. [손실] 3회 연속 손절
+4. [시장] 15분 내 5% 이상 급등락 (Flash Crash/Pump)
+5. [시스템] API 오류 3회 연속 발생
+6. [수동] 사용자의 긴급 중단 명령
+\`\`\`
+
+---
+
+## 3. 운영 파라미터
+
+### 3.1 실행 주기
+
+| 항목 | 주기 | 설명 |
+|------|------|------|
+| **시장 분석** | 4시간마다 | 4시간봉 마감 시 분석 |
+| **포지션 모니터링** | 1분마다 | 손절/익절 조건 확인 |
+| **잔고 확인** | 1시간마다 | 마진 및 PnL 확인 |
+| **리스크 계산** | 매 거래 전 | 포지션 사이징 재계산 |
+
+### 3.2 알림 설정
+
+| 이벤트 | 알림 레벨 | 채널 |
+|--------|----------|------|
+| 포지션 진입 | INFO | 텔레그램/디스코드 |
+| 포지션 청산 (익절) | INFO | 텔레그램/디스코드 |
+| 포지션 청산 (손절) | WARNING | 텔레그램/디스코드 |
+| 일일 손실 한도 50% 도달 | WARNING | 텔레그램/디스코드 |
+| 일일 손실 한도 도달 | CRITICAL | 텔레그램/디스코드 + 푸시알림 |
+| 시스템 오류 | CRITICAL | 텔레그램/디스코드 + 푸시알림 |
+| 긴급 중단 | CRITICAL | 모든 채널 + 전화알림(선택) |
+
+### 3.3 로깅 수준
+
+| 대상 | 로깅 레벨 | 보관 기간 |
+|------|----------|----------|
+| API 통신 | DEBUG | 7일 |
+| 거래 내역 | INFO | 영구 |
+| 분석 결과 | INFO | 30일 |
+| 오류 | ERROR | 90일 |
+| 성능 지표 | INFO | 영구 |
+
+---
+
+## 4. 백테스트 기준
+
+### 4.1 검증 기간
+
+- **최소 기간**: 2년 (2022년 ~ 2024년)
+- **포함 필수**: 상승장, 하락장, 횡보장 각 최소 3개월
+
+### 4.2 성과 지표 목표
+
+| 지표 | 목표값 | 최소 허용값 |
+|------|--------|------------|
+| **승률** | 45% 이상 | 40% |
+| **평균 R:R** | 2:1 이상 | 1.5:1 |
+| **최대 낙폭 (MDD)** | 15% 이하 | 20% |
+| **샤프 비율** | 1.5 이상 | 1.0 |
+| **수익 팩터** | 1.5 이상 | 1.2 |
+
+---
+
+## 5. 설정 변경 이력
+
+| 날짜 | 변경 항목 | 이전값 | 변경값 | 사유 |
+|------|----------|--------|--------|------|
+| YYYY-MM-DD | 예시 | - | - | 초기 설정 |
+
+---
+
+*마지막 업데이트: 2024-XX-XX*
+*버전: 1.0.0*
+`;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      marked.setOptions({
+        gfm: true,
+        breaks: false,
+      });
+      document.getElementById('content').innerHTML = marked.parse(markdown);
+    });
+  </script>
+</body>
+</html>
