@@ -208,13 +208,17 @@ class MarketAnalyzer:
         reasons = []
         current_price = df_15m["close"].iloc[-1]
 
-        # 1. 극단적 변동성 (최근 4시간 = 16개 15분봉)
-        recent = df_15m.tail(16)
-        range_pct = ((recent["high"].max() - recent["low"].min()) / current_price) * 100
+        # 1. 극단적 변동성 (직전 마감 캔들 기준)
+        # 이전 로직: 최근 4시간(16개) 전체 변동폭 vs 15분봉 평균 (오류: 4시간 누적 vs 15분 평균 비교)
+        # 수정 로직: 직전 캔들(iloc[-2])의 변동폭 vs 15분봉 평균 변동폭 * 3
+        # 봇이 캔들 마감 직후 실행되므로, 직전 캔들이 가장 최근의 완성된 변동성을 나타냄.
+        last_closed = df_15m.iloc[-2]
+        range_pct = ((last_closed["high"] - last_closed["low"]) / last_closed["close"]) * 100
+        
         if len(df_15m) >= 96:
             avg_range = ((df_15m["high"] - df_15m["low"]) / df_15m["close"] * 100).tail(96).mean()
             if range_pct > avg_range * EXTREME_VOLATILITY_MULTIPLIER:
-                reasons.append(f"변동성 과대 ({range_pct:.1f}% > 평균 {avg_range:.1f}% x {EXTREME_VOLATILITY_MULTIPLIER})")
+                reasons.append(f"변동성 과대 ({range_pct:.2f}% > 평균 {avg_range:.2f}% x {EXTREME_VOLATILITY_MULTIPLIER})")
 
         # 2. 불확실 구간 (1시간봉 EMA 50-200 사이)
         if df_1h is not None and "ema_50" in df_1h.columns and "ema_200" in df_1h.columns:
