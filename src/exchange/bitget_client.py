@@ -8,12 +8,25 @@ from typing import Optional, List, Dict, Any
 import ccxt.async_support as ccxt
 
 from src.config.settings import get_settings
+from src.config.trading_mode import is_demo_mode
 from src.config.constants import (
     CCXT_SYMBOL, DEMO_CCXT_SYMBOL, MARGIN_MODE, DEFAULT_LEVERAGE
 )
 from src.utils.logger import setup_logger
 
 logger = setup_logger("bitget_client")
+
+
+# 싱글톤 인스턴스 (모드 전환 시 재연결을 위해)
+_client_instance: Optional["BitgetClient"] = None
+
+
+def get_bitget_client() -> "BitgetClient":
+    """BitgetClient 싱글톤 반환"""
+    global _client_instance
+    if _client_instance is None:
+        _client_instance = BitgetClient()
+    return _client_instance
 
 
 class BitgetClient:
@@ -23,17 +36,32 @@ class BitgetClient:
         settings = get_settings()
         self._exchange: Optional[ccxt.bitget] = None
         self._settings = settings
+        self._current_mode: Optional[str] = None  # 연결 시점의 모드 저장
 
     @property
     def symbol(self) -> str:
         """현재 모드에 맞는 심볼 반환"""
-        if self._settings.is_demo:
+        if is_demo_mode():
             return DEMO_CCXT_SYMBOL
         return CCXT_SYMBOL
+
+    async def reconnect(self) -> None:
+        """
+        거래소 재연결 (모드 전환 시 호출)
+        기존 연결을 닫고 새 모드로 재연결
+        """
+        logger.info("🔄 Bitget 재연결 중...")
+        await self.close()
+        # 다음 _get_exchange 호출 시 새 모드로 연결됨
+        await self._get_exchange()
 
     async def _get_exchange(self) -> ccxt.bitget:
         """ccxt 거래소 인스턴스 (lazy init)"""
         if self._exchange is None:
+            # 현재 모드 확인
+            is_demo = is_demo_mode()
+            self._current_mode = "demo" if is_demo else "live"
+
             # 기존 API 키 사용 (데모/라이브 동일)
             config = {
                 "apiKey": self._settings.bitget_api_key,
@@ -47,7 +75,7 @@ class BitgetClient:
             }
 
             # 데모 트레이딩 모드 (Bitget paptrading)
-            if self._settings.is_demo:
+            if is_demo:
                 # Bitget 데모 모드: 헤더에 paptrading=1 추가
                 config["options"]["headers"] = {"PAPTRADING": "1"}
                 logger.info(f"🧪 데모 트레이딩 모드 — 심볼: {self.symbol}")

@@ -79,10 +79,11 @@ app = FastAPI(
 
 @app.get("/health")
 async def health_check():
+    from src.config.trading_mode import get_trading_mode
     return {
         "status": "ok",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "mode": get_settings().trading_mode,
+        "mode": get_trading_mode(),
     }
 
 
@@ -233,7 +234,8 @@ async def close_position():
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
-    settings = get_settings()
+    from src.config.trading_mode import is_demo_mode
+    is_demo = is_demo_mode()
     html = f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -247,8 +249,8 @@ body {{ font-family:'Inter','Segoe UI',sans-serif; background:#0a0a1a; color:#e0
 .header {{ background:linear-gradient(135deg,#1a1a3e,#0d0d2b); padding:20px 24px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #222; }}
 .header h1 {{ color:#f7931a; font-size:20px; }}
 .mode {{ padding:4px 12px; border-radius:12px; font-size:12px; font-weight:600;
-  background:{"#1a3a1a" if settings.is_demo else "#3a1a1a"};
-  color:{"#4ade80" if settings.is_demo else "#f87171"}; }}
+  background:{"#1a3a1a" if is_demo else "#3a1a1a"};
+  color:{"#4ade80" if is_demo else "#f87171"}; }}
 .grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; padding:20px; }}
 .card {{ background:#12122a; border:1px solid #1e1e3a; border-radius:12px; padding:20px; }}
 .card h3 {{ color:#888; font-size:12px; text-transform:uppercase; margin-bottom:8px; letter-spacing:1px; }}
@@ -273,7 +275,7 @@ td {{ padding:10px 12px; border-bottom:1px solid #1a1a2a; font-size:13px; }}
 <body>
 <div class="header">
   <h1>₿ BTC Trading Bot</h1>
-  <span class="mode">{"🔧 DEMO" if settings.is_demo else "⚠️ LIVE"}</span>
+  <span class="mode">{"🔧 DEMO" if is_demo else "⚠️ LIVE"}</span>
 </div>
 
 <div class="grid" id="cards">

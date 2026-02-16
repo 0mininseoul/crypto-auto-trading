@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     bitget_passphrase: str = Field(default="", alias="BITGET_PASSPHRASE")
 
     # --- Trading ---
-    trading_mode: str = Field(default="demo", alias="TRADING_MODE")
     trading_bot_enabled: bool = Field(default=True, alias="TRADING_BOT_ENABLED")
 
     # --- Discord ---
@@ -32,14 +31,6 @@ class Settings(BaseSettings):
 
     # --- Logging ---
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
-
-    @property
-    def is_demo(self) -> bool:
-        return self.trading_mode.lower() == "demo"
-
-    @property
-    def is_live(self) -> bool:
-        return self.trading_mode.lower() == "live"
 
     model_config = {
         "env_file": ".env",
@@ -58,16 +49,3 @@ def get_settings() -> Settings:
     if _settings is None:
         _settings = Settings()
     return _settings
-
-
-def set_trading_mode(mode: str) -> None:
-    """런타임에서 거래 모드 변경 (demo/live)"""
-    global _settings
-    if _settings is not None:
-        # Pydantic 모델은 immutable이므로 새 인스턴스 생성
-        _settings = Settings(
-            **{
-                **_settings.model_dump(),
-                "trading_mode": mode,
-            }
-        )

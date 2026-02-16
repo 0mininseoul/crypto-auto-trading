@@ -165,6 +165,7 @@ def _register_commands(tree: app_commands.CommandTree, settings):
                 RISK_PER_TRADE, DAILY_MAX_LOSS, DEFAULT_LEVERAGE,
                 MAX_DAILY_TRADES, MAX_STOP_LOSS_PERCENT, TRAILING_STOP_PERCENT,
             )
+            from src.config.trading_mode import get_trading_mode
 
             embed = discord.Embed(title="⚙️ 트레이딩 설정", color=0x808080)
             embed.add_field(name="1회 리스크", value=f"{RISK_PER_TRADE*100:.0f}%", inline=True)
@@ -173,7 +174,7 @@ def _register_commands(tree: app_commands.CommandTree, settings):
             embed.add_field(name="일일 최대 거래", value=f"{MAX_DAILY_TRADES}회", inline=True)
             embed.add_field(name="최대 손절률", value=f"{MAX_STOP_LOSS_PERCENT}%", inline=True)
             embed.add_field(name="트레일링 스탑", value=f"{TRAILING_STOP_PERCENT}%", inline=True)
-            embed.add_field(name="거래 모드", value=settings.trading_mode.upper(), inline=True)
+            embed.add_field(name="거래 모드", value=get_trading_mode().upper(), inline=True)
 
             await interaction.response.send_message(embed=embed)
         except Exception as e:
@@ -277,24 +278,25 @@ def _register_commands(tree: app_commands.CommandTree, settings):
 
         await interaction.response.defer()
         try:
-            from src.config.settings import get_settings
+            from src.config.trading_mode import (
+                get_trading_mode, set_trading_mode, is_demo_mode
+            )
             from src.config.constants import CCXT_SYMBOL, DEMO_CCXT_SYMBOL
-
-            current_settings = get_settings()
 
             if new_mode is None:
                 # 현재 모드 조회
-                mode = current_settings.trading_mode.upper()
-                symbol = DEMO_CCXT_SYMBOL if current_settings.is_demo else CCXT_SYMBOL
+                mode = get_trading_mode().upper()
+                is_demo = is_demo_mode()
+                symbol = DEMO_CCXT_SYMBOL if is_demo else CCXT_SYMBOL
 
-                if current_settings.is_demo:
+                if is_demo:
                     mode_desc = "🧪 데모 트레이딩 (가상 자금)"
                 else:
                     mode_desc = "🔴 라이브 (실거래)"
 
                 embed = discord.Embed(
                     title="🔀 거래 모드",
-                    color=0x00FF88 if current_settings.is_demo else 0xFF4444,
+                    color=0x00FF88 if is_demo else 0xFF4444,
                 )
                 embed.add_field(name="현재 모드", value=mode, inline=True)
                 embed.add_field(name="유형", value=mode_desc, inline=True)
@@ -302,21 +304,25 @@ def _register_commands(tree: app_commands.CommandTree, settings):
                 embed.set_footer(text="모드 전환: /mode demo 또는 /mode live")
                 await interaction.followup.send(embed=embed)
             else:
-                # 모드 전환 (환경변수는 런타임에 변경 불가, DB에 저장하여 관리)
+                # 모드 전환
                 new_mode = new_mode.lower()
                 if new_mode not in ["demo", "live"]:
                     await interaction.followup.send("❌ 유효하지 않은 모드입니다. `demo` 또는 `live`를 입력하세요.")
                     return
 
-                from src.database.repository import BotStatusRepository
-                from src.config.settings import set_trading_mode
+                # DB 업데이트 + 캐시 갱신
+                success = set_trading_mode(new_mode)
+                if not success:
+                    await interaction.followup.send("❌ 모드 전환 실패")
+                    return
 
-                # DB와 런타임 설정 모두 업데이트
-                BotStatusRepository.update_status(trading_mode=new_mode)
-                set_trading_mode(new_mode)
+                # BitgetClient 재연결
+                from src.exchange.bitget_client import get_bitget_client
+                client = get_bitget_client()
+                await client.reconnect()
 
                 if new_mode == "demo":
-                    msg = "🧪 **데모 트레이딩 모드**로 전환되었습니다.\n심볼: `SBTC/SUSDT:SUSDT`\n가상 자금 3000 SUSDT로 거래됩니다."
+                    msg = "🧪 **데모 트레이딩 모드**로 전환되었습니다.\n심볼: `SBTC/SUSDT:SUSDT`\n가상 자금으로 거래됩니다."
                 else:
                     msg = "🔴 **라이브 모드**로 전환되었습니다.\n⚠️ 실제 자금으로 거래됩니다!"
 

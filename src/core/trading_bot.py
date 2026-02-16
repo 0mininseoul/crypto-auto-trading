@@ -53,9 +53,11 @@ class TradingBot:
 
     async def initialize(self):
         """봇 초기화"""
+        from src.config.trading_mode import get_trading_mode, is_demo_mode
+
         logger.info("=" * 50)
         logger.info("🤖 Bitcoin Autotrading Bot 시작")
-        logger.info(f"   모드: {'🔧 데모' if self._settings.is_demo else '⚠️ 라이브'}")
+        logger.info(f"   모드: {'🔧 데모' if is_demo_mode() else '⚠️ 라이브'}")
         logger.info("=" * 50)
 
         # WebSocket 클라이언트 생성
@@ -83,7 +85,7 @@ class TradingBot:
         # 봇 상태 업데이트
         BotStatusRepository.update_status(
             status=BotState.RUNNING,
-            trading_mode=self._settings.trading_mode,
+            trading_mode=get_trading_mode(),
         )
 
         self._running = True
