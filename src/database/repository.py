@@ -1,5 +1,6 @@
 """
 데이터베이스 CRUD 작업
+DB 연결 실패 시 로컬 큐잉 지원
 """
 from datetime import datetime, date, timezone
 from typing import List, Optional, Dict, Any
@@ -11,6 +12,7 @@ from src.database.models import (
 )
 from src.utils.helpers import kst_now
 from src.utils.logger import setup_logger
+from src.utils.db_queue import db_queue
 
 logger = setup_logger("repository")
 
@@ -20,28 +22,54 @@ class TradeRepository:
 
     @staticmethod
     def save_trade(trade: Trade) -> Trade:
-        """거래 기록 저장"""
-        client = get_supabase_client()
+        """거래 기록 저장 (DB 실패 시 큐잉)"""
         data = trade.model_dump(exclude={"id", "created_at"}, exclude_none=True)
         # datetime → ISO string
         for key in ["entry_time", "exit_time"]:
             if key in data and isinstance(data[key], datetime):
                 data[key] = data[key].isoformat()
-        result = client.table("trades").insert(data).execute()
-        if result.data:
-            trade.id = result.data[0]["id"]
-            logger.info(f"거래 기록 저장: #{trade.id} {trade.side.value} {trade.symbol}")
-        return trade
+        # Enum → string
+        if "side" in data and hasattr(data["side"], "value"):
+            data["side"] = data["side"].value
+        if "status" in data and hasattr(data["status"], "value"):
+            data["status"] = data["status"].value
+
+        try:
+            client = get_supabase_client()
+            result = client.table("trades").insert(data).execute()
+            if result.data:
+                trade.id = result.data[0]["id"]
+                logger.info(f"거래 기록 저장: #{trade.id} {trade.side.value} {trade.symbol}")
+                db_queue.set_connection_status(True)
+            return trade
+        except Exception as e:
+            logger.error(f"거래 기록 저장 실패 (큐잉): {e}")
+            db_queue.set_connection_status(False)
+            db_queue.enqueue("save_trade", data)
+            # 임시 ID 할당 (메모리 내)
+            trade.id = -1
+            return trade
 
     @staticmethod
     def update_trade(trade_id: int, updates: Dict[str, Any]) -> bool:
-        """거래 기록 업데이트"""
-        client = get_supabase_client()
+        """거래 기록 업데이트 (DB 실패 시 큐잉)"""
         for key in ["entry_time", "exit_time"]:
             if key in updates and isinstance(updates[key], datetime):
                 updates[key] = updates[key].isoformat()
-        result = client.table("trades").update(updates).eq("id", trade_id).execute()
-        return len(result.data) > 0
+        # Enum → string
+        if "status" in updates and hasattr(updates["status"], "value"):
+            updates["status"] = updates["status"].value
+
+        try:
+            client = get_supabase_client()
+            result = client.table("trades").update(updates).eq("id", trade_id).execute()
+            db_queue.set_connection_status(True)
+            return len(result.data) > 0
+        except Exception as e:
+            logger.error(f"거래 기록 업데이트 실패 (큐잉): {e}")
+            db_queue.set_connection_status(False)
+            db_queue.enqueue("update_trade", {"trade_id": trade_id, "updates": updates})
+            return False
 
     @staticmethod
     def get_open_trades() -> List[Dict]:

@@ -47,6 +47,7 @@ class Trade(BaseModel):
     status: TradeStatus = TradeStatus.OPEN
     entry_reason: Optional[Dict[str, Any]] = None
     exit_reason: Optional[str] = None
+    tp_levels_executed: Optional[List[int]] = None  # 실행된 TP 레벨 목록 (중복 실행 방지)
     entry_time: datetime = Field(default_factory=kst_now)
     exit_time: Optional[datetime] = None
     created_at: Optional[datetime] = None

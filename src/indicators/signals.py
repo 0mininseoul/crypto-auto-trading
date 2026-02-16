@@ -42,7 +42,7 @@ from src.indicators.volume import (
     is_obv_trending_up,
     is_obv_trending_down,
 )
-from src.config.constants import MIN_RR_RATIO, MAX_STOP_LOSS_PERCENT, STOP_LOSS_BUFFER_PERCENT
+from src.config.constants import MIN_RR_RATIO, MAX_STOP_LOSS_PERCENT, STOP_LOSS_BUFFER_PERCENT, MACD_HISTOGRAM_MODE
 from src.utils.logger import setup_logger
 
 logger = setup_logger("signals")
@@ -134,18 +134,20 @@ def check_long_entry(
 
     if is_macd_histogram_positive(df_15m):
         macd_ok = True
-    else:
-        # MACD 히스토그램이 증가 추세면 OK (아직 양수가 아니어도)
+    elif MACD_HISTOGRAM_MODE == "moderate":
+        # moderate 모드: MACD 히스토그램이 증가 추세면 OK (아직 양수가 아니어도)
         if "macd_hist" in df_15m.columns and len(df_15m) >= 2:
             hist_now = df_15m["macd_hist"].iloc[-1]
             hist_prev = df_15m["macd_hist"].iloc[-2]
             if hist_now > hist_prev:
                 macd_ok = True
+    # strict 모드: is_macd_histogram_positive가 True일 때만 macd_ok=True
 
     if rsi_ok and macd_ok:
         mandatory_count += 1
         rsi_val = df_15m["rsi"].iloc[-1] if "rsi" in df_15m.columns else 0
-        reasons.append(f"✅ [필수] 15분봉: RSI {rsi_val:.0f} > 40 + MACD 상승 전환")
+        mode_label = "양전환" if MACD_HISTOGRAM_MODE == "strict" else "상승"
+        reasons.append(f"✅ [필수] 15분봉: RSI {rsi_val:.0f} > 40 + MACD {mode_label}")
     else:
         reasons.append(f"❌ [필수] 15분봉 모멘텀 부족 (RSI>40: {rsi_ok}, MACD↑: {macd_ok})")
 
@@ -280,18 +282,20 @@ def check_short_entry(
 
     if is_macd_histogram_negative(df_15m):
         macd_ok = True
-    else:
-        # MACD 히스토그램이 감소 추세면 OK
+    elif MACD_HISTOGRAM_MODE == "moderate":
+        # moderate 모드: MACD 히스토그램이 감소 추세면 OK
         if "macd_hist" in df_15m.columns and len(df_15m) >= 2:
             hist_now = df_15m["macd_hist"].iloc[-1]
             hist_prev = df_15m["macd_hist"].iloc[-2]
             if hist_now < hist_prev:
                 macd_ok = True
+    # strict 모드: is_macd_histogram_negative가 True일 때만 macd_ok=True
 
     if rsi_ok and macd_ok:
         mandatory_count += 1
         rsi_val = df_15m["rsi"].iloc[-1] if "rsi" in df_15m.columns else 0
-        reasons.append(f"✅ [필수] 15분봉: RSI {rsi_val:.0f} < 60 + MACD 하락 전환")
+        mode_label = "음전환" if MACD_HISTOGRAM_MODE == "strict" else "하락"
+        reasons.append(f"✅ [필수] 15분봉: RSI {rsi_val:.0f} < 60 + MACD {mode_label}")
     else:
         reasons.append(f"❌ [필수] 15분봉 모멘텀 부족 (RSI<60: {rsi_ok}, MACD↓: {macd_ok})")
 

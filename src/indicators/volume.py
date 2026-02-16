@@ -58,15 +58,36 @@ def is_volume_above_average(df: pd.DataFrame, row_idx: int = -1) -> bool:
 def is_volume_too_low(df: pd.DataFrame, threshold: float = 0.5, row_idx: int = -1) -> bool:
     """
     거래량이 너무 낮은지 확인 (진입 회피 조건)
-    최근 4시간 평균 거래량 < 14MA의 50%
+    해당 캔들의 거래량 < 14MA의 threshold%
+
+    Args:
+        df: 지표가 추가된 DataFrame
+        threshold: 기준 비율 (기본 0.5 = 50%)
+        row_idx: 확인할 행 인덱스 (기본 -1, 직전 마감 캔들은 -2)
     """
     if "volume_ma" not in df.columns:
+        logger.debug("volume_ma 컬럼 없음")
         return False
+
     row = df.iloc[row_idx]
+    volume = row.get("volume", 0)
     vol_ma = row.get("volume_ma", 0)
+
     if pd.isna(vol_ma) or vol_ma == 0:
+        logger.debug(f"volume_ma 값 없음 또는 0: {vol_ma}")
         return True
-    return row["volume"] < vol_ma * threshold
+
+    volume_ratio = volume / vol_ma
+    is_low = volume < vol_ma * threshold
+
+    # 디버깅 로그 (INFO 레벨로 출력하여 Railway에서 확인 가능)
+    logger.info(
+        f"[볼륨체크] idx={row_idx} | 거래량={volume:,.0f} | "
+        f"14MA={vol_ma:,.0f} | 비율={volume_ratio:.2%} | "
+        f"기준={threshold:.0%} | 회피={is_low}"
+    )
+
+    return is_low
 
 
 def is_obv_trending_up(df: pd.DataFrame, lookback: int = 10) -> bool:

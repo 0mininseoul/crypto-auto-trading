@@ -102,6 +102,9 @@ class OrderExecutor:
             )
             trade = TradeRepository.save_trade(trade)
 
+            # 성공적인 거래 후 API 에러 카운터 리셋
+            self._risk.reset_api_errors()
+
             logger.info(
                 f"{'🟢 롱' if trade_side == TradeSide.LONG else '🔴 숏'} 진입 완료 | "
                 f"#{trade.id} @ {entry_price:,.2f} | "
@@ -163,6 +166,8 @@ class OrderExecutor:
                 })
 
                 self._risk.record_trade_result(pnl)
+                # 성공적인 청산 후 API 에러 카운터 리셋
+                self._risk.reset_api_errors()
 
                 emoji = "💰" if pnl > 0 else "💸"
                 logger.info(
@@ -198,6 +203,8 @@ class OrderExecutor:
         TP1 (R:R 1.5:1) → 50% 청산, SL을 본전으로
         TP2 (R:R 2.5:1) → 30% 청산, 트레일링 활성화
         TP3 (R:R 4.0:1) → 잔여 전량 청산
+
+        중복 실행 방지: tp_levels_executed 필드로 이미 실행된 레벨 추적
         """
         if not trade.stop_loss:
             return None
@@ -211,7 +218,14 @@ class OrderExecutor:
         else:
             rr_ratio = (trade.entry_price - current_price) / risk
 
+        # 이미 실행된 TP 레벨 확인
+        executed_levels = trade.tp_levels_executed or []
+
         for level, config in TAKE_PROFIT_LEVELS.items():
+            # 이미 실행된 레벨은 스킵
+            if level in executed_levels:
+                continue
+
             if rr_ratio >= config["rr_ratio"]:
                 action = config["action"]
 
@@ -221,13 +235,20 @@ class OrderExecutor:
 
                 elif action == "activate_trailing" and rr_ratio >= 2.5 and trade.quantity > 0:
                     await self.execute_exit(trade, f"TP{level} (R:R {rr_ratio:.1f})", 30)
-                    return f"tp{level}_partial"
+                    # 실행된 TP 레벨 기록
+                    executed_levels.append(level)
+                    TradeRepository.update_trade(trade.id, {
+                        "tp_levels_executed": executed_levels,
+                    })
+                    return f"tp{level}_partial_trailing"
 
                 elif action == "move_sl_to_entry" and rr_ratio >= 1.5:
                     await self.execute_exit(trade, f"TP{level} (R:R {rr_ratio:.1f})", 50)
-                    # 손절을 본전으로 이동
+                    # 손절을 본전으로 이동 + 실행된 TP 레벨 기록
+                    executed_levels.append(level)
                     TradeRepository.update_trade(trade.id, {
                         "stop_loss": trade.entry_price,
+                        "tp_levels_executed": executed_levels,
                     })
                     return f"tp{level}_breakeven"
 

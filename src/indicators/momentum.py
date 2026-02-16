@@ -92,10 +92,24 @@ def is_rsi_overbought(df: pd.DataFrame, threshold: float = 70, row_idx: int = -1
     return df["rsi"].iloc[row_idx] > threshold
 
 
-def detect_rsi_bullish_divergence(df: pd.DataFrame, lookback: int = 20) -> bool:
+def detect_rsi_bullish_divergence(
+    df: pd.DataFrame,
+    lookback: int = 20,
+    min_price_drop_pct: float = 0.5,
+    min_rsi_rise: float = 3.0,
+) -> bool:
     """
-    RSI 상승 다이버전스 감지
+    RSI 상승 다이버전스 감지 (개선된 버전)
     가격은 저점 하락, RSI는 저점 상승 → 롱 신호
+
+    Args:
+        df: OHLCV + RSI DataFrame
+        lookback: 비교 기간 (캔들 수)
+        min_price_drop_pct: 최소 가격 하락률 (%) - 노이즈 필터
+        min_rsi_rise: 최소 RSI 상승 포인트 - 노이즈 필터
+
+    Returns:
+        다이버전스 감지 여부
     """
     if "rsi" not in df.columns or len(df) < lookback:
         return False
@@ -103,22 +117,56 @@ def detect_rsi_bullish_divergence(df: pd.DataFrame, lookback: int = 20) -> bool:
     recent = df.tail(lookback)
     mid = lookback // 2
 
-    # 가격 저점 비교
-    price_low_1 = recent["low"].iloc[:mid].min()
-    price_low_2 = recent["low"].iloc[mid:].min()
+    # 가격 저점 비교 (인덱스도 함께 저장)
+    price_low_1_idx = recent["low"].iloc[:mid].idxmin()
+    price_low_2_idx = recent["low"].iloc[mid:].idxmin()
+    price_low_1 = recent.loc[price_low_1_idx, "low"]
+    price_low_2 = recent.loc[price_low_2_idx, "low"]
 
-    # RSI 저점 비교
-    rsi_low_1 = recent["rsi"].iloc[:mid].min()
-    rsi_low_2 = recent["rsi"].iloc[mid:].min()
+    # RSI 저점 비교 (같은 인덱스 사용)
+    rsi_low_1 = recent.loc[price_low_1_idx, "rsi"]
+    rsi_low_2 = recent.loc[price_low_2_idx, "rsi"]
 
-    # 가격 저점↓ + RSI 저점↑ = 상승 다이버전스
-    return price_low_2 < price_low_1 and rsi_low_2 > rsi_low_1
+    # 가격 하락률 계산
+    price_drop_pct = (price_low_1 - price_low_2) / price_low_1 * 100
+    rsi_rise = rsi_low_2 - rsi_low_1
+
+    # 조건: 가격 저점↓ + RSI 저점↑ + 최소 변화율 충족
+    is_divergence = (
+        price_low_2 < price_low_1 and
+        rsi_low_2 > rsi_low_1 and
+        price_drop_pct >= min_price_drop_pct and
+        rsi_rise >= min_rsi_rise
+    )
+
+    if is_divergence:
+        logger.debug(
+            f"RSI 상승 다이버전스 감지: "
+            f"가격 {price_low_1:,.0f}→{price_low_2:,.0f} ({price_drop_pct:+.2f}%), "
+            f"RSI {rsi_low_1:.1f}→{rsi_low_2:.1f} ({rsi_rise:+.1f})"
+        )
+
+    return is_divergence
 
 
-def detect_rsi_bearish_divergence(df: pd.DataFrame, lookback: int = 20) -> bool:
+def detect_rsi_bearish_divergence(
+    df: pd.DataFrame,
+    lookback: int = 20,
+    min_price_rise_pct: float = 0.5,
+    min_rsi_drop: float = 3.0,
+) -> bool:
     """
-    RSI 하락 다이버전스 감지
+    RSI 하락 다이버전스 감지 (개선된 버전)
     가격은 고점 상승, RSI는 고점 하락 → 숏 신호
+
+    Args:
+        df: OHLCV + RSI DataFrame
+        lookback: 비교 기간 (캔들 수)
+        min_price_rise_pct: 최소 가격 상승률 (%) - 노이즈 필터
+        min_rsi_drop: 최소 RSI 하락 포인트 - 노이즈 필터
+
+    Returns:
+        다이버전스 감지 여부
     """
     if "rsi" not in df.columns or len(df) < lookback:
         return False
@@ -126,14 +174,36 @@ def detect_rsi_bearish_divergence(df: pd.DataFrame, lookback: int = 20) -> bool:
     recent = df.tail(lookback)
     mid = lookback // 2
 
-    price_high_1 = recent["high"].iloc[:mid].max()
-    price_high_2 = recent["high"].iloc[mid:].max()
+    # 가격 고점 비교 (인덱스도 함께 저장)
+    price_high_1_idx = recent["high"].iloc[:mid].idxmax()
+    price_high_2_idx = recent["high"].iloc[mid:].idxmax()
+    price_high_1 = recent.loc[price_high_1_idx, "high"]
+    price_high_2 = recent.loc[price_high_2_idx, "high"]
 
-    rsi_high_1 = recent["rsi"].iloc[:mid].max()
-    rsi_high_2 = recent["rsi"].iloc[mid:].max()
+    # RSI 고점 비교 (같은 인덱스 사용)
+    rsi_high_1 = recent.loc[price_high_1_idx, "rsi"]
+    rsi_high_2 = recent.loc[price_high_2_idx, "rsi"]
 
-    # 가격 고점↑ + RSI 고점↓ = 하락 다이버전스
-    return price_high_2 > price_high_1 and rsi_high_2 < rsi_high_1
+    # 가격 상승률 계산
+    price_rise_pct = (price_high_2 - price_high_1) / price_high_1 * 100
+    rsi_drop = rsi_high_1 - rsi_high_2
+
+    # 조건: 가격 고점↑ + RSI 고점↓ + 최소 변화율 충족
+    is_divergence = (
+        price_high_2 > price_high_1 and
+        rsi_high_2 < rsi_high_1 and
+        price_rise_pct >= min_price_rise_pct and
+        rsi_drop >= min_rsi_drop
+    )
+
+    if is_divergence:
+        logger.debug(
+            f"RSI 하락 다이버전스 감지: "
+            f"가격 {price_high_1:,.0f}→{price_high_2:,.0f} ({price_rise_pct:+.2f}%), "
+            f"RSI {rsi_high_1:.1f}→{rsi_high_2:.1f} ({-rsi_drop:+.1f})"
+        )
+
+    return is_divergence
 
 
 def is_rsi_bounce_from_oversold(df: pd.DataFrame, lookback: int = 10) -> bool:

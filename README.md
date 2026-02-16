@@ -2,7 +2,7 @@
 
 BTC/USDT 선물 자동매매 봇 - Bitget API + Discord 제어 + 웹 대시보드
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template)
 
 ## Features
 
@@ -14,8 +14,8 @@ BTC/USDT 선물 자동매매 봇 - Bitget API + Discord 제어 + 웹 대시보�
 
 ## Live Demo
 
-- **Web Dashboard**: https://crypto-auto-trading.onrender.com
-- **Health Check**: https://crypto-auto-trading.onrender.com/health
+- **Web Dashboard**: https://crypto-auto-trading.up.railway.app
+- **Health Check**: https://crypto-auto-trading.up.railway.app/health
 
 ## Tech Stack
 
@@ -27,7 +27,7 @@ BTC/USDT 선물 자동매매 봇 - Bitget API + Discord 제어 + 웹 대시보�
 | Web | FastAPI, Uvicorn |
 | Database | Supabase (PostgreSQL) |
 | Notification | Discord.py |
-| Hosting | Render (Free Tier) |
+| Hosting | Railway |
 
 ## Project Structure
 
@@ -154,10 +154,10 @@ Open http://localhost:8000
 
 ## Deployment
 
-### Render (Recommended)
+### Railway (Recommended)
 
 1. Fork this repository
-2. Create new Web Service on [Render](https://render.com)
+2. Create new project on [Railway](https://railway.app)
 3. Connect GitHub repo
 4. Set environment variables
 5. Deploy!

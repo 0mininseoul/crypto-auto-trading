@@ -21,6 +21,7 @@ from src.config.constants import (
     MAX_STOP_LOSS_PERCENT,
     FLASH_CRASH_PERCENT,
     API_ERROR_STREAK_LIMIT,
+    MIN_ORDER_SIZE_USDT,
 )
 from src.utils.logger import setup_logger
 from src.utils.helpers import format_usdt, format_percent, kst_now
@@ -121,6 +122,14 @@ class RiskManager:
         size_btc = risk_amount / price_diff
         size_usdt = size_btc * entry_price
         margin_required = size_usdt / leverage
+
+        # 최소 주문 금액 검증
+        if size_usdt < MIN_ORDER_SIZE_USDT:
+            logger.warning(
+                f"⚠️ 포지션 크기가 최소 주문 금액 미달 "
+                f"({format_usdt(size_usdt)} < {format_usdt(MIN_ORDER_SIZE_USDT)})"
+            )
+            return {"size_btc": 0, "size_usdt": 0, "margin_required": 0, "risk_amount": 0}
 
         logger.info(
             f"포지션 사이징: {size_btc:.6f} BTC ({format_usdt(size_usdt)}) | "
