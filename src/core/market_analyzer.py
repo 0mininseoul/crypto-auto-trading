@@ -231,7 +231,7 @@ class MarketAnalyzer:
         # 3. 거래량 부족 (직전 마감 캔들 기준)
         # 현재 진행 중인 캔들(row_idx=-1)은 거래량이 0부터 시작하므로 항상 "부족"으로 오판됨
         if is_volume_too_low(df_15m, threshold=LOW_VOLUME_THRESHOLD, row_idx=-2):
-            reasons.append("거래량 < 14MA의 50%")
+            reasons.append(f"거래량 < 14MA의 {LOW_VOLUME_THRESHOLD:.0%}")
 
         return {
             "should_avoid": len(reasons) > 0,
