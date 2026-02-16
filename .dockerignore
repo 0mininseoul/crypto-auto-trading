@@ -1,0 +1,62 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.venv
+venv/
+ENV/
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation & Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+docs/
+TRADING_KNOWLEDGE_BASE.md
+TRADING_STRATEGY.md
+PRD.md
+PRD_CHECKLIST.md
+BITGET_API_GUIDE.md
+DISCORD_BOT_GUIDE.md
+
+# Railway
+railway.toml
