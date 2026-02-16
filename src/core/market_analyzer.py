@@ -88,6 +88,14 @@ class MarketAnalyzer:
         if df_5m is not None and len(df_5m) > 30:
             df_5m = prepare_dataframe(df_5m)
 
+        # 로그: 분석 기준 캔들 시각 출력 (검증용)
+        try:
+            last_closed_15m = df_15m.iloc[-2]["timestamp"]
+            last_closed_5m = df_5m.iloc[-2]["timestamp"] if df_5m is not None else "N/A"
+            logger.info(f"   🔍 분석 기준(마감봉): 15m[{last_closed_15m}] | 5m[{last_closed_5m}]")
+        except Exception as e:
+            logger.warning(f"   ⚠️ 캔들 시각 확인 실패: {e}")
+
         # 3. 시장 상태 평가
         market_state = self._evaluate_market_state(df_15m)
         logger.info(f"   시장 상태: {market_state}")
@@ -159,11 +167,13 @@ class MarketAnalyzer:
         return check_close_signal(df_15m, position_side)
 
     def _evaluate_market_state(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """시장 상태 평가 (15분봉 기준)"""
-        current_price = df["close"].iloc[-1]
-        ema_50 = df["ema_50"].iloc[-1] if "ema_50" in df.columns else current_price
-        ema_200 = df["ema_200"].iloc[-1] if "ema_200" in df.columns else current_price
-        rsi = df["rsi"].iloc[-1] if "rsi" in df.columns else 50
+        """시장 상태 평가 (15분봉 마감 기준)"""
+        # 하이브리드 전략: 마감된 캔들(-2) 기준
+        IDX = -2
+        current_price = df["close"].iloc[IDX]
+        ema_50 = df["ema_50"].iloc[IDX] if "ema_50" in df.columns else current_price
+        ema_200 = df["ema_200"].iloc[IDX] if "ema_200" in df.columns else current_price
+        rsi = df["rsi"].iloc[IDX] if "rsi" in df.columns else 50
 
         # 추세 판별
         if current_price > ema_50 > ema_200:
