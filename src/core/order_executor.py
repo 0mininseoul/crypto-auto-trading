@@ -5,6 +5,8 @@
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 
+from src.utils.helpers import kst_now
+
 from src.exchange.bitget_client import BitgetClient
 from src.core.risk_manager import RiskManager
 from src.database.repository import TradeRepository
@@ -96,7 +98,7 @@ class OrderExecutor:
                     "mandatory_met": signal.mandatory_met,
                     "additional_met": signal.additional_met,
                 },
-                entry_time=datetime.now(timezone.utc),
+                entry_time=kst_now(),
             )
             trade = TradeRepository.save_trade(trade)
 
@@ -154,7 +156,7 @@ class OrderExecutor:
                 TradeRepository.update_trade(trade.id, {
                     "status": TradeStatus.CLOSED.value,
                     "exit_price": exit_price,
-                    "exit_time": datetime.now(timezone.utc).isoformat(),
+                    "exit_time": kst_now().isoformat(),
                     "exit_reason": reason,
                     "pnl": pnl,
                     "pnl_percent": round(pnl_pct, 2),

@@ -6,6 +6,8 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
+from src.utils.helpers import kst_now
+
 import pandas as pd
 import numpy as np
 
@@ -86,7 +88,7 @@ class MarketAnalyzer:
         if avoidance["should_avoid"]:
             logger.warning(f"   ⛔ 진입 회피: {avoidance['reasons']}")
             self._last_analysis = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": kst_now().isoformat(),
                 "market_state": market_state,
                 "avoidance": avoidance,
                 "signal": "no_signal",
@@ -113,7 +115,7 @@ class MarketAnalyzer:
 
         # 분석 결과 저장
         self._last_analysis = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": kst_now().isoformat(),
             "market_state": market_state,
             "avoidance": avoidance,
             "signal": signal.signal_type.value,

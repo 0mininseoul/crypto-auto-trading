@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any
 import discord
 
 from src.config.settings import get_settings
+from src.utils.helpers import kst_now
 from src.utils.logger import setup_logger
 
 logger = setup_logger("notifier")
@@ -56,7 +57,7 @@ class Notifier:
         embed = discord.Embed(
             title=f"{direction} 포지션 진입",
             color=color,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=kst_now(),
         )
         embed.add_field(name="진입가", value=f"${entry_price:,.2f}", inline=True)
         embed.add_field(name="수량", value=f"{quantity:.6f} BTC", inline=True)
@@ -93,7 +94,7 @@ class Notifier:
         embed = discord.Embed(
             title=f"{emoji} 포지션 청산 ({side.upper()})",
             color=color,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=kst_now(),
         )
         embed.add_field(name="진입가", value=f"${entry_price:,.2f}", inline=True)
         embed.add_field(name="청산가", value=f"${exit_price:,.2f}", inline=True)
@@ -120,7 +121,7 @@ class Notifier:
         embed = discord.Embed(
             title="🚨 손절 발동",
             color=0xFF0000,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=kst_now(),
         )
         embed.add_field(name="방향", value=side.upper(), inline=True)
         embed.add_field(name="진입가", value=f"${entry_price:,.2f}", inline=True)
@@ -141,7 +142,7 @@ class Notifier:
             title="⚠️ 일일 손실 한도 도달",
             description="자동으로 신규 거래가 중단됩니다.",
             color=0xFFA500,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=kst_now(),
         )
         embed.add_field(
             name="오늘 손실",
@@ -161,7 +162,7 @@ class Notifier:
             title=f"🔧 시스템 {severity}",
             description=f"```{error_msg[:1000]}```",
             color=color,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=kst_now(),
         )
 
         await self._send(embed)

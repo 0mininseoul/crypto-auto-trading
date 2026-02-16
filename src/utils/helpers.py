@@ -1,21 +1,29 @@
 """
 헬퍼 유틸리티 함수
 """
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal, ROUND_DOWN
 from typing import Optional, Union
 
+# KST (한국 표준시, UTC+9)
+KST = timezone(timedelta(hours=9))
+
+
+def kst_now() -> datetime:
+    """현재 KST 시각 반환"""
+    return datetime.now(KST)
+
 
 def utc_now() -> datetime:
-    """현재 UTC 시각 반환"""
+    """현재 UTC 시각 반환 (하위 호환)"""
     return datetime.now(timezone.utc)
 
 
 def timestamp_to_datetime(ts: Union[int, float]) -> datetime:
-    """밀리초 타임스탬프를 datetime으로 변환"""
+    """밀리초 타임스탬프를 KST datetime으로 변환"""
     if ts > 1e12:
         ts = ts / 1000  # 밀리초 → 초
-    return datetime.fromtimestamp(ts, tz=timezone.utc)
+    return datetime.fromtimestamp(ts, tz=KST)
 
 
 def datetime_to_timestamp(dt: datetime) -> int:

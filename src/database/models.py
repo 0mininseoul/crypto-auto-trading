@@ -6,6 +6,8 @@ from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 from enum import Enum
 
+from src.utils.helpers import kst_now
+
 
 class TradeSide(str, Enum):
     LONG = "long"
@@ -45,7 +47,7 @@ class Trade(BaseModel):
     status: TradeStatus = TradeStatus.OPEN
     entry_reason: Optional[Dict[str, Any]] = None
     exit_reason: Optional[str] = None
-    entry_time: datetime = Field(default_factory=datetime.utcnow)
+    entry_time: datetime = Field(default_factory=kst_now)
     exit_time: Optional[datetime] = None
     created_at: Optional[datetime] = None
 

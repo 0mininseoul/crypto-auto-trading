@@ -4,7 +4,7 @@
 """
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from src.config.settings import get_settings
@@ -43,7 +43,7 @@ class SupabaseLogHandler(logging.Handler):
                     "funcName": record.funcName,
                     "lineno": record.lineno,
                 },
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(timezone(timedelta(hours=9))).isoformat(),
             }
             client.table("system_logs").insert(log_entry).execute()
         except Exception:
@@ -69,13 +69,20 @@ def setup_logger(name: str = "trading_bot") -> logging.Logger:
     log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
     logger.setLevel(log_level)
 
-    # 콘솔 핸들러
+    # 콘솔 핸들러 (KST 시간)
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
     console_format = logging.Formatter(
-        "[%(asctime)s] %(levelname)-8s | %(name)s.%(funcName)s | %(message)s",
+        "[%(asctime)s KST] %(levelname)-8s | %(name)s.%(funcName)s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+    # KST 타임존 적용
+    import time
+    from datetime import timezone as tz, timedelta
+    _KST_OFFSET = 9 * 3600  # KST = UTC+9
+    def _kst_converter(timestamp):
+        return time.gmtime(timestamp + _KST_OFFSET)
+    console_format.converter = _kst_converter
     console_handler.setFormatter(console_format)
     logger.addHandler(console_handler)
 

@@ -23,7 +23,7 @@ from src.config.constants import (
     API_ERROR_STREAK_LIMIT,
 )
 from src.utils.logger import setup_logger
-from src.utils.helpers import format_usdt, format_percent
+from src.utils.helpers import format_usdt, format_percent, kst_now
 
 logger = setup_logger("risk_manager")
 
@@ -68,7 +68,7 @@ class RiskManager:
         if self._consecutive_losses >= CONSECUTIVE_LOSS_COOLDOWN["losses"]:
             cooldown_hours = CONSECUTIVE_LOSS_COOLDOWN["cooldown_hours"]
             if self._last_loss_time:
-                elapsed = datetime.now(timezone.utc) - self._last_loss_time
+                elapsed = kst_now() - self._last_loss_time
                 if elapsed < timedelta(hours=cooldown_hours):
                     remaining = cooldown_hours - elapsed.total_seconds() / 3600
                     reasons.append(f"연속 손절 쿨다운 중 ({remaining:.1f}시간 남음)")
@@ -161,7 +161,7 @@ class RiskManager:
         """거래 결과 기록 (연속 손절 추적)"""
         if pnl < 0:
             self._consecutive_losses += 1
-            self._last_loss_time = datetime.now(timezone.utc)
+            self._last_loss_time = kst_now()
             logger.info(f"연속 손절: {self._consecutive_losses}회")
         else:
             self._consecutive_losses = 0

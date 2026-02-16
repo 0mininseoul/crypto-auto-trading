@@ -88,10 +88,18 @@ def _register_commands(tree: app_commands.CommandTree, settings):
 
             state_emoji = {"running": "🟢", "paused": "🟡", "stopped": "🔴"}.get(state, "⚪")
 
+            # heartbeat KST 변환
+            heartbeat_display = "–"
+            if heartbeat and heartbeat != "–":
+                try:
+                    heartbeat_display = heartbeat[:19].replace("T", " ") + " KST"
+                except Exception:
+                    heartbeat_display = str(heartbeat)[:19]
+
             embed = discord.Embed(
                 title="📊 봇 상태",
                 color=0x00BFFF,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=kst_now(),
             )
             embed.add_field(name="상태", value=f"{state_emoji} {state.upper()}", inline=True)
             embed.add_field(name="모드", value=mode.upper(), inline=True)
@@ -102,7 +110,7 @@ def _register_commands(tree: app_commands.CommandTree, settings):
                 inline=True,
             )
             embed.add_field(name="오픈 포지션", value=str(len(open_trades)), inline=True)
-            embed.add_field(name="하트비트", value=str(heartbeat)[:19], inline=True)
+            embed.add_field(name="하트비트 (KST)", value=heartbeat_display, inline=True)
 
             await interaction.followup.send(embed=embed)
         except Exception as e:

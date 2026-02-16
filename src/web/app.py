@@ -80,9 +80,11 @@ app = FastAPI(
 @app.get("/health")
 async def health_check():
     from src.config.trading_mode import get_trading_mode
+    from src.utils.helpers import kst_now
     return {
         "status": "ok",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": kst_now().isoformat(),
+        "timezone": "KST (UTC+9)",
         "mode": get_trading_mode(),
     }
 
@@ -284,7 +286,7 @@ td {{ padding:10px 12px; border-bottom:1px solid #1a1a2a; font-size:13px; }}
   <div class="card"><h3>잔고 (USDT)</h3><div class="value" id="balance">–</div></div>
   <div class="card"><h3>오늘 PnL</h3><div class="value" id="dailyPnl">–</div></div>
   <div class="card"><h3>오픈 포지션</h3><div class="value" id="openPos">–</div></div>
-  <div class="card"><h3>하트비트</h3><div class="value" id="heartbeat" style="font-size:14px">–</div></div>
+  <div class="card"><h3>하트비트 (KST)</h3><div class="value" id="heartbeat" style="font-size:14px">–</div></div>
 </div>
 
 <div class="controls">
@@ -333,7 +335,7 @@ async function load() {{
     const s = statusR.data || {{}};
     const state = s.status || 'unknown';
     document.getElementById('botState').innerHTML = (stateEmoji[state]||'⚪')+' '+state.toUpperCase();
-    document.getElementById('heartbeat').textContent = (s.last_heartbeat||'–').slice(0,19);
+    document.getElementById('heartbeat').textContent = (s.last_heartbeat||'–').slice(0,19).replace('T',' ') + ' KST';
 
     const b = balR.data || {{}};
     document.getElementById('balance').textContent = (b.total||0).toFixed(2);

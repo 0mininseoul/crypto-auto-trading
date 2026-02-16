@@ -9,6 +9,7 @@ from src.database.models import (
     Trade, TradeStatus, BotStatus, BotState,
     TradingMode, DailyPerformance
 )
+from src.utils.helpers import kst_now
 from src.utils.logger import setup_logger
 
 logger = setup_logger("repository")
@@ -70,7 +71,7 @@ class TradeRepository:
     @staticmethod
     def get_today_trades() -> List[Dict]:
         """오늘 거래 내역 조회"""
-        today = datetime.now(timezone.utc).date().isoformat()
+        today = kst_now().date().isoformat()
         client = get_supabase_client()
         result = (
             client.table("trades")
@@ -126,7 +127,7 @@ class BotStatusRepository:
             return False
 
         updates: Dict[str, Any] = {
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": kst_now().isoformat(),
         }
         if status:
             updates["status"] = status.value if hasattr(status, 'value') else status
@@ -153,8 +154,8 @@ class BotStatusRepository:
         result = (
             client.table("bot_status")
             .update({
-                "last_heartbeat": datetime.now(timezone.utc).isoformat(),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "last_heartbeat": kst_now().isoformat(),
+                "updated_at": kst_now().isoformat(),
             })
             .eq("id", current["id"])
             .execute()
@@ -224,7 +225,7 @@ class SettingsRepository:
         data = {
             "key": key,
             "value": value,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": kst_now().isoformat(),
         }
         result = (
             client.table("settings")
