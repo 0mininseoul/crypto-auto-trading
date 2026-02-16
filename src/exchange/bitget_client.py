@@ -98,15 +98,26 @@ class BitgetClient:
     # === 계정 관련 ===
 
     async def get_balance(self) -> Dict[str, Any]:
-        """USDT 잔고 조회"""
+        """USDT (또는 SUSDT) 잔고 조회"""
         exchange = await self._get_exchange()
+        is_demo = is_demo_mode()
+        
+        # 데모 모드: SUSDT-FUTURES, 라이브: USDT-FUTURES
+        params = {"type": "swap"}
+        if is_demo:
+            params["productType"] = "SUSDT-FUTURES"
+        
         try:
-            balance = await exchange.fetch_balance({"type": "swap"})
-            usdt = balance.get("USDT", {})
+            balance = await exchange.fetch_balance(params)
+            
+            # 데모면 SUSDT, 아니면 USDT 확인
+            currency = "SUSDT" if is_demo else "USDT"
+            target_balance = balance.get(currency, {})
+
             return {
-                "total": float(usdt.get("total", 0)),
-                "free": float(usdt.get("free", 0)),
-                "used": float(usdt.get("used", 0)),
+                "total": float(target_balance.get("total", 0)),
+                "free": float(target_balance.get("free", 0)),
+                "used": float(target_balance.get("used", 0)),
             }
         except Exception as e:
             logger.error(f"잔고 조회 실패: {e}")
