@@ -298,8 +298,8 @@ class BitgetClient:
 
         # 포지션 모드에 따른 파라미터 설정
         if self._position_mode == "one_way":
-            # One-way 모드: posSide 파라미터 제거 (net position)
-            # reduceOnly가 없으면 신규 진입, 있으면 청산
+            # One-way 모드: ccxt에 oneWayMode=True 전달하여 posSide 생략
+            order_params["oneWayMode"] = True
             order_params.pop("posSide", None)
             order_params.pop("holdSide", None)
             logger.debug(f"One-way 모드 주문: {side} (reduceOnly={order_params.get('reduceOnly', False)})")
