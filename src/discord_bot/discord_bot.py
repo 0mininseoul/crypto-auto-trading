@@ -71,17 +71,15 @@ def _register_commands(tree: app_commands.CommandTree, settings):
     async def cmd_status(interaction: discord.Interaction):
         await interaction.response.defer()
         try:
-            from src.database.repository import BotStatusRepository, TradeRepository
+            from src.database.repository import BotStatusRepository
             from src.exchange.bitget_client import BitgetClient
 
             status = BotStatusRepository.get_status()
-            open_trades = TradeRepository.get_open_trades()
 
             client = BitgetClient()
             balance = await client.get_balance()
             ticker = await client.get_ticker()
-            # 실제 거래소 포지션 조회
-            exchange_positions = await client.get_positions()
+            positions = await client.get_positions()
             await client.close()
 
             state = status.get("status", "unknown") if status else "unknown"
@@ -109,24 +107,25 @@ def _register_commands(tree: app_commands.CommandTree, settings):
             embed.add_field(name="BTC 가격", value=f"${btc_price:,.2f}", inline=True)
             embed.add_field(
                 name="잔고",
-                value=f"{balance.get('total', 0):.2f} {balance.get('currency', 'USDT')}" if balance else "–",
+                value=f"{balance.get('total', 0):.2f} USDT" if balance else "–",
                 inline=True,
             )
-            embed.add_field(name="DB 포지션", value=str(len(open_trades)), inline=True)
-            embed.add_field(name="거래소 포지션", value=str(len(exchange_positions)), inline=True)
-            embed.add_field(name="하트비트 (KST)", value=heartbeat_display, inline=False)
+            embed.add_field(name="오픈 포지션", value=str(len(positions)), inline=True)
+            embed.add_field(name="하트비트", value=heartbeat_display, inline=True)
 
-            # 실제 거래소 포지션 상세 정보
-            if exchange_positions:
+            # 포지션 상세 정보
+            if positions:
                 pos_lines = []
-                for pos in exchange_positions:
+                for pos in positions:
                     side = pos.get("side", "?").upper()
                     size = pos.get("size", 0)
                     entry = pos.get("entry_price", 0)
                     pnl = pos.get("unrealized_pnl", 0)
+                    leverage = pos.get("leverage", 1)
                     emoji = "🟢" if side == "LONG" else "🔴"
                     pos_lines.append(
-                        f"{emoji} {side} {size:.4f} BTC @ ${entry:,.2f} | PnL: ${pnl:+,.2f}"
+                        f"{emoji} {side} {size:.4f} BTC @ ${entry:,.2f} ({leverage}x)\n"
+                        f"   미실현 PnL: ${pnl:+,.2f}"
                     )
                 embed.add_field(
                     name="📍 현재 포지션",
