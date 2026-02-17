@@ -54,11 +54,12 @@ class OrderExecutor:
         side = "buy" if signal.signal_type == SignalType.LONG else "sell"
         trade_side = TradeSide.LONG if signal.signal_type == SignalType.LONG else TradeSide.SHORT
 
-        # 포지션 사이징
+        # 포지션 사이징 (신뢰도 기반 동적 리스크)
         position = self._risk.calculate_position_size(
             balance=balance["free"],
             entry_price=signal.entry_price,
             stop_loss_price=signal.stop_loss,
+            confidence=signal.confidence,
         )
 
         if position["size_btc"] <= 0:
@@ -99,6 +100,7 @@ class OrderExecutor:
                 entry_reason={
                     "signal_type": signal.signal_type.value,
                     "confidence": signal.confidence,
+                    "risk_rate": position.get("risk_rate", 0.05),
                     "reasons": signal.reasons[:5],  # 상위 5개
                     "mandatory_met": signal.mandatory_met,
                     "additional_met": signal.additional_met,

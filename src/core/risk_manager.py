@@ -10,6 +10,11 @@ from src.database.repository import TradeRepository, BotStatusRepository
 from src.database.models import BotState
 from src.config.constants import (
     RISK_PER_TRADE,
+    RISK_LOW_CONFIDENCE,
+    RISK_MEDIUM_CONFIDENCE,
+    RISK_HIGH_CONFIDENCE,
+    CONFIDENCE_LOW_THRESHOLD,
+    CONFIDENCE_HIGH_THRESHOLD,
     DAILY_MAX_LOSS,
     WEEKLY_MAX_LOSS,
     MAX_CONCURRENT_POSITIONS,
@@ -107,15 +112,42 @@ class RiskManager:
 
         return {"allowed": allowed, "reasons": reasons}
 
+    def get_dynamic_risk_rate(self, confidence: float) -> float:
+        """
+        신뢰도 기반 동적 리스크 비율 반환
+
+        Args:
+            confidence: 신호 신뢰도 (0.0 ~ 1.0)
+
+        Returns:
+            리스크 비율 (0.03 ~ 0.07)
+        """
+        if confidence < CONFIDENCE_LOW_THRESHOLD:
+            risk_rate = RISK_LOW_CONFIDENCE
+            level = "낮음"
+        elif confidence > CONFIDENCE_HIGH_THRESHOLD:
+            risk_rate = RISK_HIGH_CONFIDENCE
+            level = "높음"
+        else:
+            risk_rate = RISK_MEDIUM_CONFIDENCE
+            level = "중간"
+
+        logger.info(
+            f"📊 동적 리스크: {risk_rate*100:.0f}% "
+            f"(신뢰도 {confidence:.0%} → {level})"
+        )
+        return risk_rate
+
     def calculate_position_size(
         self,
         balance: float,
         entry_price: float,
         stop_loss_price: float,
         leverage: int = DEFAULT_LEVERAGE,
+        confidence: float = 0.0,
     ) -> Dict[str, float]:
         """
-        포지션 크기 계산
+        포지션 크기 계산 (신뢰도 기반 동적 리스크)
 
         공식: position_size = (잔고 × 리스크%) / |진입가 - 손절가|
 
@@ -124,23 +156,30 @@ class RiskManager:
             entry_price: 진입 예정가
             stop_loss_price: 손절가
             leverage: 레버리지
+            confidence: 신호 신뢰도 (0.0 ~ 1.0)
 
         Returns:
-            {"size_btc": ..., "size_usdt": ..., "margin_required": ..., "risk_amount": ...}
+            {"size_btc": ..., "size_usdt": ..., "margin_required": ..., "risk_amount": ..., "risk_rate": ...}
         """
-        risk_amount = balance * RISK_PER_TRADE
+        # 신뢰도 기반 동적 리스크 계산
+        if confidence > 0:
+            risk_rate = self.get_dynamic_risk_rate(confidence)
+        else:
+            risk_rate = RISK_PER_TRADE  # 기본값 (후방 호환)
+
+        risk_amount = balance * risk_rate
         price_diff = abs(entry_price - stop_loss_price)
 
         if price_diff == 0:
             logger.error("진입가와 손절가가 동일합니다")
-            return {"size_btc": 0, "size_usdt": 0, "margin_required": 0, "risk_amount": 0}
+            return {"size_btc": 0, "size_usdt": 0, "margin_required": 0, "risk_amount": 0, "risk_rate": 0}
 
-        # 손절폭 제한 (최대 3%)
+        # 손절폭 제한 (최대 2%)
         sl_percent = (price_diff / entry_price) * 100
         if sl_percent > MAX_STOP_LOSS_PERCENT:
             logger.warning(f"손절폭 초과 ({sl_percent:.1f}% > {MAX_STOP_LOSS_PERCENT}%), 조정됨")
             price_diff = entry_price * (MAX_STOP_LOSS_PERCENT / 100)
-            risk_amount = balance * RISK_PER_TRADE
+            risk_amount = balance * risk_rate
 
         size_btc = risk_amount / price_diff
         size_usdt = size_btc * entry_price
@@ -152,11 +191,11 @@ class RiskManager:
                 f"⚠️ 포지션 크기가 최소 주문 금액 미달 "
                 f"({format_usdt(size_usdt)} < {format_usdt(MIN_ORDER_SIZE_USDT)})"
             )
-            return {"size_btc": 0, "size_usdt": 0, "margin_required": 0, "risk_amount": 0}
+            return {"size_btc": 0, "size_usdt": 0, "margin_required": 0, "risk_amount": 0, "risk_rate": 0}
 
         logger.info(
             f"포지션 사이징: {size_btc:.6f} BTC ({format_usdt(size_usdt)}) | "
-            f"마진: {format_usdt(margin_required)} | 리스크: {format_usdt(risk_amount)}"
+            f"마진: {format_usdt(margin_required)} | 리스크: {format_usdt(risk_amount)} ({risk_rate*100:.0f}%)"
         )
 
         return {
@@ -164,6 +203,7 @@ class RiskManager:
             "size_usdt": size_usdt,
             "margin_required": margin_required,
             "risk_amount": risk_amount,
+            "risk_rate": risk_rate,
         }
 
     def select_leverage(self, volatility: float, avg_volatility: float) -> int:

@@ -110,7 +110,6 @@ def _register_commands(tree: app_commands.CommandTree, settings):
                 value=f"{balance.get('total', 0):.2f} USDT" if balance else "–",
                 inline=True,
             )
-            embed.add_field(name="오픈 포지션", value=str(len(positions)), inline=True)
             embed.add_field(name="하트비트", value=heartbeat_display, inline=True)
 
             # 포지션 상세 정보
@@ -195,13 +194,24 @@ def _register_commands(tree: app_commands.CommandTree, settings):
     async def cmd_settings(interaction: discord.Interaction):
         try:
             from src.config.constants import (
-                RISK_PER_TRADE, DAILY_MAX_LOSS, DEFAULT_LEVERAGE,
+                RISK_LOW_CONFIDENCE, RISK_MEDIUM_CONFIDENCE, RISK_HIGH_CONFIDENCE,
+                CONFIDENCE_LOW_THRESHOLD, CONFIDENCE_HIGH_THRESHOLD,
+                DAILY_MAX_LOSS, DEFAULT_LEVERAGE,
                 MAX_DAILY_TRADES, MAX_STOP_LOSS_PERCENT, TRAILING_STOP_PERCENT,
             )
             from src.config.trading_mode import get_trading_mode
 
             embed = discord.Embed(title="⚙️ 트레이딩 설정", color=0x808080)
-            embed.add_field(name="1회 리스크", value=f"{RISK_PER_TRADE*100:.0f}%", inline=True)
+
+            # 신뢰도 기반 동적 리스크 표시
+            risk_info = (
+                f"📊 동적 리스크\n"
+                f"• 낮음 (<{CONFIDENCE_LOW_THRESHOLD:.0%}): {RISK_LOW_CONFIDENCE*100:.0f}%\n"
+                f"• 중간: {RISK_MEDIUM_CONFIDENCE*100:.0f}%\n"
+                f"• 높음 (>{CONFIDENCE_HIGH_THRESHOLD:.0%}): {RISK_HIGH_CONFIDENCE*100:.0f}%"
+            )
+            embed.add_field(name="리스크 설정", value=risk_info, inline=False)
+
             embed.add_field(name="일일 최대 손실", value=f"{DAILY_MAX_LOSS*100:.0f}%", inline=True)
             embed.add_field(name="기본 레버리지", value=f"{DEFAULT_LEVERAGE}x", inline=True)
             embed.add_field(name="일일 최대 거래", value=f"{MAX_DAILY_TRADES}회", inline=True)

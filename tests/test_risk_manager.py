@@ -85,6 +85,55 @@ class TestCalculatePositionSize:
         # size_btc: 500 / 1000 = 0.5 BTC
         assert result["size_btc"] == pytest.approx(0.5, rel=0.01)
 
+    def test_low_confidence_risk(self, risk_manager):
+        """낮은 신뢰도 → 3% 리스크"""
+        result = risk_manager.calculate_position_size(
+            balance=10000,
+            entry_price=50000,
+            stop_loss_price=49000,
+            leverage=10,
+            confidence=0.65,  # 70% 미만 → 낮음
+        )
+
+        # 리스크: 10000 * 0.03 = 300
+        # 손절폭: 1000
+        # BTC 수량: 300 / 1000 = 0.3 BTC
+        assert result["risk_rate"] == pytest.approx(0.03, rel=0.01)
+        assert result["size_btc"] == pytest.approx(0.3, rel=0.01)
+        assert result["risk_amount"] == pytest.approx(300, rel=0.01)
+
+    def test_medium_confidence_risk(self, risk_manager):
+        """중간 신뢰도 → 5% 리스크"""
+        result = risk_manager.calculate_position_size(
+            balance=10000,
+            entry_price=50000,
+            stop_loss_price=49000,
+            leverage=10,
+            confidence=0.80,  # 70-85% → 중간
+        )
+
+        # 리스크: 10000 * 0.05 = 500
+        assert result["risk_rate"] == pytest.approx(0.05, rel=0.01)
+        assert result["size_btc"] == pytest.approx(0.5, rel=0.01)
+        assert result["risk_amount"] == pytest.approx(500, rel=0.01)
+
+    def test_high_confidence_risk(self, risk_manager):
+        """높은 신뢰도 → 7% 리스크"""
+        result = risk_manager.calculate_position_size(
+            balance=10000,
+            entry_price=50000,
+            stop_loss_price=49000,
+            leverage=10,
+            confidence=0.90,  # 85% 초과 → 높음
+        )
+
+        # 리스크: 10000 * 0.07 = 700
+        # 손절폭: 1000
+        # BTC 수량: 700 / 1000 = 0.7 BTC
+        assert result["risk_rate"] == pytest.approx(0.07, rel=0.01)
+        assert result["size_btc"] == pytest.approx(0.7, rel=0.01)
+        assert result["risk_amount"] == pytest.approx(700, rel=0.01)
+
 
 class TestSelectLeverage:
     """레버리지 선택 테스트"""

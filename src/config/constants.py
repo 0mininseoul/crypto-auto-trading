@@ -37,7 +37,19 @@ VOLUME_MA_PERIOD = 14
 # ============================================
 # 리스크 관리
 # ============================================
-RISK_PER_TRADE = 0.05           # 1회 최대 리스크 5% (소액 운용)
+# 신뢰도 기반 동적 리스크 (TRADING_KNOWLEDGE_BASE.md 기반)
+# - 낮음: 3% (확인 요소 부족)
+# - 중간: 5% (기본값, 필수 조건 충족)
+# - 높음: 7% (추가 조건 다수 충족)
+RISK_LOW_CONFIDENCE = 0.03      # 신뢰도 < 70%
+RISK_MEDIUM_CONFIDENCE = 0.05   # 신뢰도 70-85%
+RISK_HIGH_CONFIDENCE = 0.07     # 신뢰도 > 85%
+
+# 신뢰도 임계값
+CONFIDENCE_LOW_THRESHOLD = 0.70     # 70% 미만 = 낮음
+CONFIDENCE_HIGH_THRESHOLD = 0.85    # 85% 초과 = 높음
+
+RISK_PER_TRADE = 0.05           # 기본 리스크 (후방 호환)
 DAILY_MAX_LOSS = 0.05           # 1일 최대 손실 5%
 WEEKLY_MAX_LOSS = 0.10          # 주간 최대 손실 10%
 TOTAL_CAPITAL_PROTECTION = 0.70 # 총 자본의 70% 보호
