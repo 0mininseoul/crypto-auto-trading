@@ -25,5 +25,8 @@ supabase>=2.0
 # Discord
 discord.py>=2.3
 
+# AI/LLM
+google-generativeai>=0.8
+
 # Utilities
 python-dateutil>=2.8

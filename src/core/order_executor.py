@@ -125,6 +125,14 @@ class OrderExecutor:
             try:
                 notifier = get_notifier()
                 if notifier.is_ready:
+                    # signal_info 구성 (AI 분석용)
+                    signal_info = {
+                        "signal_type": signal.signal_type.value,
+                        "confidence": signal.confidence,
+                        "mandatory_met": signal.mandatory_met,
+                        "additional_met": signal.additional_met,
+                        "reasons": signal.reasons,
+                    }
                     await notifier.notify_entry(
                         side=trade_side.value,
                         entry_price=entry_price,
@@ -132,6 +140,7 @@ class OrderExecutor:
                         leverage=leverage,
                         stop_loss=signal.stop_loss,
                         take_profit=signal.take_profit_1 or 0,
+                        signal_info=signal_info,
                     )
             except Exception as notify_err:
                 logger.warning(f"진입 알림 전송 실패: {notify_err}")

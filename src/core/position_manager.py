@@ -116,6 +116,7 @@ class PositionManager:
                     pnl=pnl * 0.5,  # 50% 청산
                     pnl_percent=pnl_pct,
                     reason="TP1 (50% 부분익절, SL→본전)",
+                    quantity=trade.quantity * 0.5,
                 )
             elif "trailing" in result or "partial" in result:
                 self._trailing_active[trade_id] = True
@@ -134,6 +135,7 @@ class PositionManager:
                     pnl=pnl * 0.3,  # 30% 청산
                     pnl_percent=pnl_pct,
                     reason="TP2 (30% 부분익절, 트레일링 활성화)",
+                    quantity=trade.quantity * 0.3,
                 )
             elif "full_close" in result:
                 # TP3 전량 청산 알림
@@ -144,6 +146,7 @@ class PositionManager:
                     pnl=pnl,
                     pnl_percent=pnl_pct,
                     reason="TP3 (전량 익절)",
+                    quantity=trade.quantity,
                 )
                 self._cleanup_tracking(trade_id)
 
@@ -173,6 +176,7 @@ class PositionManager:
                         pnl=pnl,
                         pnl_percent=pnl_pct,
                         reason="트레일링 스탑",
+                        quantity=trade.quantity,
                     )
                 self._cleanup_tracking(trade_id)
                 return True
@@ -197,6 +201,7 @@ class PositionManager:
                         pnl=pnl,
                         pnl_percent=pnl_pct,
                         reason="트레일링 스탑",
+                        quantity=trade.quantity,
                     )
                 self._cleanup_tracking(trade_id)
                 return True

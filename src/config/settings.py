@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
     supabase_key: str = Field(default="", alias="SUPABASE_KEY")
 
+    # --- Gemini AI ---
+    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
+
     # --- Logging ---
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 

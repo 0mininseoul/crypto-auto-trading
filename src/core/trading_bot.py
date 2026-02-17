@@ -82,6 +82,17 @@ class TradingBot:
             self._exchange, self._executor, self._risk
         )
 
+        # AI 차트 분석기 초기화
+        try:
+            from src.ai.chart_analyzer import init_chart_analyzer
+            chart_analyzer = init_chart_analyzer(self._data_fetcher, self._exchange)
+            if chart_analyzer.is_available:
+                logger.info("🧠 AI 차트 분석기 활성화 (Gemini 3.0 Flash)")
+            else:
+                logger.warning("⚠️ AI 차트 분석기 비활성화 (GEMINI_API_KEY 미설정)")
+        except Exception as e:
+            logger.warning(f"AI 차트 분석기 초기화 실패: {e}")
+
         # 봇 상태 업데이트
         BotStatusRepository.update_status(
             status=BotState.RUNNING,
@@ -149,6 +160,7 @@ class TradingBot:
                         # Discord 청산 알림
                         pnl = float(trade_data.get("pnl", 0) or 0)
                         pnl_pct = float(trade_data.get("pnl_percent", 0) or 0)
+                        quantity = float(trade_data.get("quantity", 0) or 0)
                         await self._notifier.notify_exit(
                             side=side,
                             entry_price=float(trade_data.get("entry_price", 0)),
@@ -156,6 +168,7 @@ class TradingBot:
                             pnl=pnl,
                             pnl_percent=pnl_pct,
                             reason=reason,
+                            quantity=quantity,
                         )
 
             except Exception as e:

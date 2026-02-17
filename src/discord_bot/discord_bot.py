@@ -329,6 +329,137 @@ def _register_commands(tree: app_commands.CommandTree, settings):
         except Exception as e:
             await interaction.response.send_message(f"❌ 오류: {e}")
 
+    # ━━━ /analysis ━━━
+    @tree.command(name="analysis", description="AI 차트 분석 (현재 시장 상황 + 전략 제안)")
+    async def cmd_analysis(interaction: discord.Interaction):
+        await interaction.response.defer()
+        try:
+            from src.ai.chart_analyzer import get_chart_analyzer
+            from src.exchange.bitget_client import BitgetClient
+
+            analyzer = get_chart_analyzer()
+            if not analyzer or not analyzer.is_available:
+                await interaction.followup.send(
+                    "❌ AI 분석을 사용할 수 없습니다.\n"
+                    "`.env` 파일에 `GEMINI_API_KEY`를 설정하세요."
+                )
+                return
+
+            # 현재 포지션 조회
+            client = BitgetClient()
+            positions = await client.get_positions()
+            await client.close()
+
+            position = None
+            if positions:
+                pos = positions[0]
+                ticker_price = analyzer._data.current_price
+                entry_price = pos.get("entry_price", 0)
+                side = pos.get("side", "long")
+
+                # 미실현 PnL 계산
+                size = pos.get("size", 0)
+                if side == "long":
+                    unrealized_pnl = (ticker_price - entry_price) * size
+                else:
+                    unrealized_pnl = (entry_price - ticker_price) * size
+                pnl_pct = (unrealized_pnl / (entry_price * size) * 100) if entry_price > 0 and size > 0 else 0
+
+                position = {
+                    "side": side,
+                    "entry_price": entry_price,
+                    "current_price": ticker_price,
+                    "quantity": size,
+                    "unrealized_pnl": unrealized_pnl,
+                    "pnl_percent": pnl_pct,
+                    "stop_loss": pos.get("stop_loss", 0),
+                    "take_profit": pos.get("take_profit", 0),
+                }
+
+            # AI 분석 실행
+            analysis_result = await analyzer.analyze(
+                position=position,
+                analysis_type="general",
+                force_refresh=True,
+            )
+
+            # Discord Embed 생성
+            color = 0x00BFFF  # 기본 파란색
+            if position:
+                color = 0x00FF88 if position["unrealized_pnl"] >= 0 else 0xFF4444
+
+            # 결과가 길면 자르기
+            if len(analysis_result) > 4000:
+                analysis_result = analysis_result[:3997] + "..."
+
+            embed = discord.Embed(
+                title="📊 AI 차트 분석",
+                description=analysis_result,
+                color=color,
+                timestamp=kst_now(),
+            )
+            embed.set_footer(text="Powered by Gemini 3.0 Flash")
+
+            await interaction.followup.send(embed=embed)
+
+        except Exception as e:
+            logger.error(f"/analysis 오류: {e}", exc_info=True)
+            await interaction.followup.send(f"❌ 분석 중 오류 발생: {str(e)[:200]}")
+
+    # ━━━ /learning ━━━
+    @tree.command(name="learning", description="AI 학습 현황 조회")
+    async def cmd_learning(interaction: discord.Interaction):
+        try:
+            from src.ai.chart_analyzer import get_chart_analyzer
+
+            analyzer = get_chart_analyzer()
+            if not analyzer:
+                await interaction.response.send_message(
+                    "❌ AI 분석기가 초기화되지 않았습니다."
+                )
+                return
+
+            stats = analyzer.get_learning_stats()
+
+            embed = discord.Embed(
+                title="🧠 AI 학습 현황",
+                color=0x9B59B6,
+                timestamp=kst_now(),
+            )
+            embed.add_field(
+                name="복기한 거래",
+                value=f"{stats['total_reviews']}건",
+                inline=True,
+            )
+            embed.add_field(
+                name="승리",
+                value=f"{stats['wins']}건 ({stats['win_rate']:.0%})",
+                inline=True,
+            )
+            embed.add_field(
+                name="축적된 인사이트",
+                value=f"{stats['insights_count']}개",
+                inline=True,
+            )
+            embed.add_field(
+                name="학습된 패턴",
+                value=f"{stats['patterns_count']}개",
+                inline=True,
+            )
+            if stats['last_updated']:
+                embed.add_field(
+                    name="마지막 업데이트",
+                    value=stats['last_updated'][:19].replace("T", " "),
+                    inline=True,
+                )
+
+            embed.set_footer(text="거래 복기를 통해 AI가 지속적으로 학습합니다")
+
+            await interaction.response.send_message(embed=embed)
+
+        except Exception as e:
+            await interaction.response.send_message(f"❌ 오류: {e}")
+
     # ━━━ /mode (Admin) ━━━
     @tree.command(name="mode", description="[Admin] 거래 모드 조회/전환 (demo/live)")
     @app_commands.describe(new_mode="전환할 모드 (demo 또는 live). 생략 시 현재 모드 조회")

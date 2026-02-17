@@ -1,6 +1,7 @@
 """
 Discord 알림 전송 (Notifier)
 트레이딩 이벤트 → Discord 채널 Embed 메시지
+AI 분석 통합 - 진입/청산 시 자동 분석 전송
 """
 import asyncio
 from datetime import datetime, timezone
@@ -47,8 +48,9 @@ class Notifier:
         leverage: int,
         stop_loss: float,
         take_profit: float,
+        signal_info: Optional[Dict[str, Any]] = None,
     ):
-        """포지션 진입 알림"""
+        """포지션 진입 알림 + AI 분석"""
         color = 0x00FF88 if side.lower() == "long" else 0xFF4444
         direction = "📈 LONG" if side.lower() == "long" else "📉 SHORT"
 
@@ -76,6 +78,37 @@ class Notifier:
 
         await self._send(embed)
 
+        # AI 분석 전송 (비동기)
+        asyncio.create_task(self._send_entry_analysis(signal_info))
+
+    async def _send_entry_analysis(self, signal_info: Optional[Dict[str, Any]]):
+        """진입 시 AI 분석 전송"""
+        try:
+            from src.ai.chart_analyzer import get_chart_analyzer
+
+            analyzer = get_chart_analyzer()
+            if not analyzer or not analyzer.is_available:
+                return
+
+            analysis = await analyzer.analyze_for_entry(signal_info or {})
+
+            if analysis and len(analysis) > 50:  # 의미있는 분석인 경우만
+                # 분석 결과가 길면 자르기
+                if len(analysis) > 4000:
+                    analysis = analysis[:3997] + "..."
+
+                embed = discord.Embed(
+                    title="🤖 AI 진입 분석",
+                    description=analysis,
+                    color=0x9B59B6,
+                    timestamp=kst_now(),
+                )
+                embed.set_footer(text="이 분석은 참고용이며, 실제 결정은 전략에 따릅니다")
+                await self._send(embed)
+
+        except Exception as e:
+            logger.error(f"진입 AI 분석 전송 실패: {e}")
+
     # ─── 청산 알림 ───
 
     async def notify_exit(
@@ -86,8 +119,9 @@ class Notifier:
         pnl: float,
         pnl_percent: float,
         reason: str,
+        quantity: float = 0,
     ):
-        """포지션 청산 알림"""
+        """포지션 청산 알림 + AI 복기"""
         is_win = pnl >= 0
         color = 0x00FF88 if is_win else 0xFF4444
         emoji = "💰" if is_win else "📉"
@@ -107,6 +141,49 @@ class Notifier:
         embed.add_field(name="사유", value=reason, inline=False)
 
         await self._send(embed)
+
+        # AI 복기 분석 전송 (비동기)
+        trade_data = {
+            "side": side,
+            "entry_price": entry_price,
+            "exit_price": exit_price,
+            "pnl": pnl,
+            "pnl_percent": pnl_percent,
+            "exit_reason": reason,
+            "quantity": quantity,
+        }
+        asyncio.create_task(self._send_exit_analysis(trade_data))
+
+    async def _send_exit_analysis(self, trade_data: Dict[str, Any]):
+        """청산 시 AI 복기 분석 전송 + 학습"""
+        try:
+            from src.ai.chart_analyzer import get_chart_analyzer
+
+            analyzer = get_chart_analyzer()
+            if not analyzer or not analyzer.is_available:
+                return
+
+            analysis = await analyzer.analyze_for_exit(trade_data)
+
+            if analysis and len(analysis) > 50:
+                # 분석 결과가 길면 자르기
+                if len(analysis) > 4000:
+                    analysis = analysis[:3997] + "..."
+
+                pnl = trade_data.get("pnl", 0)
+                color = 0x00FF88 if pnl >= 0 else 0xFF4444
+
+                embed = discord.Embed(
+                    title="🧠 AI 거래 복기",
+                    description=analysis,
+                    color=color,
+                    timestamp=kst_now(),
+                )
+                embed.set_footer(text="이 복기는 AI 학습에 저장됩니다")
+                await self._send(embed)
+
+        except Exception as e:
+            logger.error(f"청산 AI 분석 전송 실패: {e}")
 
     # ─── 손절 알림 ───
 
