@@ -115,7 +115,7 @@ class OrderExecutor:
 
         except Exception as e:
             logger.error(f"진입 주문 실패: {e}")
-            self._risk.record_api_error()
+            self._risk.record_api_error(str(e))
             return None
 
     async def execute_exit(
@@ -189,7 +189,7 @@ class OrderExecutor:
 
         except Exception as e:
             logger.error(f"청산 주문 실패: {e}")
-            self._risk.record_api_error()
+            self._risk.record_api_error(str(e))
             return False
 
     async def check_take_profit_levels(

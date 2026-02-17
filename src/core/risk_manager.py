@@ -29,12 +29,17 @@ from src.utils.helpers import format_usdt, format_percent, kst_now
 logger = setup_logger("risk_manager")
 
 
+# API 오류 자동 복구 시간 (1시간)
+API_ERROR_RESET_HOURS = 1
+
+
 class RiskManager:
     """리스크 관리"""
 
     def __init__(self, exchange: BitgetClient):
         self._exchange = exchange
         self._api_error_count = 0
+        self._last_api_error_time: Optional[datetime] = None
         self._consecutive_losses = 0
         self._last_loss_time: Optional[datetime] = None
 
@@ -74,9 +79,27 @@ class RiskManager:
                     remaining = cooldown_hours - elapsed.total_seconds() / 3600
                     reasons.append(f"연속 손절 쿨다운 중 ({remaining:.1f}시간 남음)")
 
-        # 5. API 오류 연속
+        # 5. API 오류 연속 (자동 복구 체크)
         if self._api_error_count >= API_ERROR_STREAK_LIMIT:
-            reasons.append(f"API 오류 {self._api_error_count}회 연속 발생")
+            # 일정 시간 경과 후 자동 리셋
+            if self._last_api_error_time:
+                elapsed = kst_now() - self._last_api_error_time
+                if elapsed >= timedelta(hours=API_ERROR_RESET_HOURS):
+                    logger.info(
+                        f"✅ API 오류 카운터 자동 리셋 "
+                        f"({API_ERROR_RESET_HOURS}시간 경과)"
+                    )
+                    self.reset_api_errors()
+                else:
+                    remaining_mins = (
+                        API_ERROR_RESET_HOURS * 60 - elapsed.total_seconds() / 60
+                    )
+                    reasons.append(
+                        f"API 오류 {self._api_error_count}회 연속 발생 "
+                        f"(자동 복구까지 {remaining_mins:.0f}분)"
+                    )
+            else:
+                reasons.append(f"API 오류 {self._api_error_count}회 연속 발생")
 
         allowed = len(reasons) == 0
         if not allowed:
@@ -176,15 +199,25 @@ class RiskManager:
             self._consecutive_losses = 0
             logger.info("연속 손절 카운터 초기화")
 
-    def record_api_error(self):
+    def record_api_error(self, error_msg: str = ""):
         """API 오류 기록"""
         self._api_error_count += 1
+        self._last_api_error_time = kst_now()
+
         if self._api_error_count >= API_ERROR_STREAK_LIMIT:
-            logger.critical(f"🚨 API 오류 {self._api_error_count}회 연속 — 거래 중단")
+            logger.critical(
+                f"🚨 API 오류 {self._api_error_count}회 연속 — 거래 중단 "
+                f"({API_ERROR_RESET_HOURS}시간 후 자동 복구)"
+            )
+            if error_msg:
+                logger.critical(f"   마지막 오류: {error_msg}")
 
     def reset_api_errors(self):
         """API 오류 카운터 초기화"""
+        if self._api_error_count > 0:
+            logger.info(f"🔄 API 오류 카운터 초기화 (이전: {self._api_error_count}회)")
         self._api_error_count = 0
+        self._last_api_error_time = None
 
     async def emergency_stop(self, reason: str):
         """

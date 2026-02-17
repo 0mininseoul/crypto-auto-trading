@@ -37,6 +37,7 @@ class BitgetClient:
         self._exchange: Optional[ccxt.bitget] = None
         self._settings = settings
         self._current_mode: Optional[str] = None  # 연결 시점의 모드 저장
+        self._position_mode: Optional[str] = None  # 'one_way' 또는 'hedge'
 
     @property
     def symbol(self) -> str:
@@ -84,9 +85,42 @@ class BitgetClient:
 
             self._exchange = ccxt.bitget(config)
             await self._exchange.load_markets()
+
+            # 포지션 모드 확인
+            await self._detect_position_mode()
             logger.info("✅ Bitget 연결 성공")
 
         return self._exchange
+
+    async def _detect_position_mode(self) -> str:
+        """
+        계정의 포지션 모드 확인 (One-way / Hedge)
+
+        Returns:
+            'one_way' 또는 'hedge'
+        """
+        if self._position_mode:
+            return self._position_mode
+
+        try:
+            # Bitget v2 API로 계정 설정 조회
+            response = await self._exchange.privateMixGetV2MixAccountAccount({
+                "symbol": self.symbol.replace("/", "").replace(":SUSDT", "").replace(":USDT", ""),
+                "productType": "SUSDT-FUTURES" if is_demo_mode() else "USDT-FUTURES",
+                "marginCoin": "SUSDT" if is_demo_mode() else "USDT",
+            })
+
+            # holdMode: 'single_hold' (one-way) / 'double_hold' (hedge)
+            hold_mode = response.get("data", {}).get("holdMode", "single_hold")
+            self._position_mode = "one_way" if hold_mode == "single_hold" else "hedge"
+            logger.info(f"📋 포지션 모드: {self._position_mode} ({hold_mode})")
+
+        except Exception as e:
+            # 조회 실패 시 기본값 one_way (Bitget 기본값)
+            logger.warning(f"포지션 모드 조회 실패, 기본값(one_way) 사용: {e}")
+            self._position_mode = "one_way"
+
+        return self._position_mode
 
     async def close(self):
         """연결 종료"""
@@ -241,6 +275,7 @@ class BitgetClient:
         amount: float,
         symbol: Optional[str] = None,
         params: Optional[Dict] = None,
+        position_side: Optional[str] = None,
     ) -> Dict:
         """
         시장가 주문
@@ -250,19 +285,43 @@ class BitgetClient:
             amount: 수량 (BTC)
             symbol: 심볼 (기본값: 현재 모드에 맞는 심볼)
             params: 추가 파라미터 (TP/SL 등)
+            position_side: 'long', 'short' (Hedge 모드용) 또는 None (One-way 모드)
         """
         # 심볼 기본값 설정
         if symbol is None:
             symbol = self.symbol
 
         exchange = await self._get_exchange()
+
+        # 파라미터 병합
+        order_params = params.copy() if params else {}
+
+        # 포지션 모드에 따른 파라미터 설정
+        if self._position_mode == "one_way":
+            # One-way 모드: posSide 파라미터 제거 (net position)
+            # reduceOnly가 없으면 신규 진입, 있으면 청산
+            order_params.pop("posSide", None)
+            order_params.pop("holdSide", None)
+            logger.debug(f"One-way 모드 주문: {side} (reduceOnly={order_params.get('reduceOnly', False)})")
+        else:
+            # Hedge 모드: posSide 필수
+            if position_side:
+                order_params["posSide"] = position_side
+            elif "reduceOnly" in order_params and order_params["reduceOnly"]:
+                # 청산 시 반대 포지션
+                order_params["posSide"] = "short" if side == "buy" else "long"
+            else:
+                # 신규 진입 시
+                order_params["posSide"] = "long" if side == "buy" else "short"
+            logger.debug(f"Hedge 모드 주문: {side} posSide={order_params.get('posSide')}")
+
         try:
             order = await exchange.create_order(
                 symbol=symbol,
                 type="market",
                 side=side,
                 amount=amount,
-                params=params or {},
+                params=order_params,
             )
             logger.info(
                 f"시장가 주문 체결: {side} {amount} {symbol} @ {order.get('average', 'N/A')}"
