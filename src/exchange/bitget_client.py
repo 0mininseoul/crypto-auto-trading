@@ -352,12 +352,15 @@ class BitgetClient:
             logger.info(
                 f"시장가 주문 체결: {side} {amount} {symbol} @ {order.get('average', 'N/A')}"
             )
+            # None 값 안전 처리
+            filled = order.get("filled")
+            avg_price = order.get("average") or order.get("price")
             return {
                 "id": order["id"],
                 "symbol": order["symbol"],
                 "side": order["side"],
-                "amount": float(order.get("filled", amount)),
-                "price": float(order.get("average") or order.get("price") or 0),
+                "amount": float(filled) if filled is not None else float(amount),
+                "price": float(avg_price) if avg_price is not None else 0.0,
                 "status": order["status"],
             }
         except Exception as e:
