@@ -129,15 +129,7 @@ class TradingBot:
                     trade = await self._executor.execute_entry(signal)
                     if trade:
                         logger.info(f"📌 새 포지션 생성: #{trade.id}")
-                        # Discord 알림
-                        await self._notifier.notify_entry(
-                            side=trade.side.value,
-                            entry_price=trade.entry_price,
-                            quantity=trade.quantity,
-                            leverage=trade.leverage,
-                            stop_loss=trade.stop_loss or 0,
-                            take_profit=trade.take_profit or 0,
-                        )
+                        # Discord 알림은 order_executor에서 직접 전송
                 elif is_paused:
                     logger.info("⏸️ PAUSED — 신규 진입 차단")
 

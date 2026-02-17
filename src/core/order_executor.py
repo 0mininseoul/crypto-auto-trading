@@ -13,6 +13,7 @@ from src.database.repository import TradeRepository
 from src.database.models import Trade, TradeSide, TradeStatus
 from src.indicators.signals import Signal, SignalType
 from src.config.constants import TAKE_PROFIT_LEVELS, TRAILING_STOP_PERCENT, get_active_symbol, get_quote_currency
+from src.discord_bot.notifier import get_notifier
 from src.utils.logger import setup_logger
 from src.utils.helpers import round_price, round_quantity
 
@@ -85,14 +86,16 @@ class OrderExecutor:
                 take_profit=signal.take_profit_1,
             )
 
-            entry_price = order.get("price", signal.entry_price)
+            # entry_price가 0이면 signal.entry_price 사용
+            entry_price = order.get("price") or signal.entry_price
+            filled_amount = order.get("amount") or amount
 
             # DB에 거래 기록
             trade = Trade(
                 symbol=get_active_symbol(),
                 side=trade_side,
                 entry_price=entry_price,
-                quantity=order.get("amount", amount),
+                quantity=filled_amount,
                 leverage=leverage,
                 stop_loss=round_price(signal.stop_loss),
                 take_profit=round_price(signal.take_profit_1) if signal.take_profit_1 else None,
@@ -117,6 +120,21 @@ class OrderExecutor:
                 f"#{trade.id} @ {entry_price:,.2f} | "
                 f"SL: {signal.stop_loss:,.2f} | TP1: {signal.take_profit_1:,.2f}"
             )
+
+            # Discord 알림 (여기서 직접 전송하여 파싱 오류 시에도 알림 보장)
+            try:
+                notifier = get_notifier()
+                if notifier.is_ready:
+                    await notifier.notify_entry(
+                        side=trade_side.value,
+                        entry_price=entry_price,
+                        quantity=filled_amount,
+                        leverage=leverage,
+                        stop_loss=signal.stop_loss,
+                        take_profit=signal.take_profit_1 or 0,
+                    )
+            except Exception as notify_err:
+                logger.warning(f"진입 알림 전송 실패: {notify_err}")
 
             return trade
 
