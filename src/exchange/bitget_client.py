@@ -321,13 +321,14 @@ class BitgetClient:
 
         # 포지션 모드에 따른 파라미터 설정
         if self._position_mode == "one_way":
-            # One-way 모드: tradeSide 파라미터로 진입/청산 구분
-            is_reduce = order_params.get("reduceOnly", False)
-            order_params["tradeSide"] = "close" if is_reduce else "open"
-            order_params["oneWayMode"] = True
+            # One-way 모드: ccxt가 자동으로 처리하도록 hedged=False 설정
+            # tradeSide는 ccxt가 내부적으로 처리하므로 직접 설정하지 않음
+            order_params["hedged"] = False
+            order_params.pop("tradeSide", None)
             order_params.pop("posSide", None)
             order_params.pop("holdSide", None)
-            logger.debug(f"One-way 모드 주문: {side} tradeSide={order_params['tradeSide']}")
+            is_reduce = order_params.get("reduceOnly", False)
+            logger.debug(f"One-way 모드 주문: {side} reduceOnly={is_reduce}")
         else:
             # Hedge 모드: posSide 필수
             if position_side:
