@@ -284,6 +284,8 @@ class BitgetClient:
         symbol: Optional[str] = None,
         params: Optional[Dict] = None,
         position_side: Optional[str] = None,
+        stop_loss: Optional[float] = None,
+        take_profit: Optional[float] = None,
     ) -> Dict:
         """
         시장가 주문
@@ -294,6 +296,8 @@ class BitgetClient:
             symbol: 심볼 (기본값: 현재 모드에 맞는 심볼)
             params: 추가 파라미터 (TP/SL 등)
             position_side: 'long', 'short' (Hedge 모드용) 또는 None (One-way 모드)
+            stop_loss: 손절가 (거래소에 설정)
+            take_profit: 익절가 (거래소에 설정)
         """
         # 심볼 기본값 설정
         if symbol is None:
@@ -303,6 +307,14 @@ class BitgetClient:
 
         # 파라미터 병합
         order_params = params.copy() if params else {}
+
+        # TP/SL 설정 (Bitget presetStopLossPrice / presetTakeProfitPrice)
+        if stop_loss and not order_params.get("reduceOnly", False):
+            order_params["presetStopLossPrice"] = str(stop_loss)
+            logger.info(f"📍 손절가 설정: ${stop_loss:,.2f}")
+        if take_profit and not order_params.get("reduceOnly", False):
+            order_params["presetTakeProfitPrice"] = str(take_profit)
+            logger.info(f"📍 익절가 설정: ${take_profit:,.2f}")
 
         # 포지션 모드에 따른 파라미터 설정
         if self._position_mode == "one_way":

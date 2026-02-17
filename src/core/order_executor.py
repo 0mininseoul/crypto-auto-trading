@@ -76,8 +76,13 @@ class OrderExecutor:
             await self._exchange.set_leverage(leverage)
             await self._exchange.set_margin_mode("isolated")
 
-            # 주문 실행
-            order = await self._exchange.place_market_order(side, amount)
+            # 주문 실행 (TP/SL 포함)
+            order = await self._exchange.place_market_order(
+                side=side,
+                amount=amount,
+                stop_loss=signal.stop_loss,
+                take_profit=signal.take_profit_1,
+            )
 
             entry_price = order.get("price", signal.entry_price)
 

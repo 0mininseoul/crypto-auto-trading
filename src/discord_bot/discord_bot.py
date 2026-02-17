@@ -80,6 +80,8 @@ def _register_commands(tree: app_commands.CommandTree, settings):
             client = BitgetClient()
             balance = await client.get_balance()
             ticker = await client.get_ticker()
+            # 실제 거래소 포지션 조회
+            exchange_positions = await client.get_positions()
             await client.close()
 
             state = status.get("status", "unknown") if status else "unknown"
@@ -110,8 +112,27 @@ def _register_commands(tree: app_commands.CommandTree, settings):
                 value=f"{balance.get('total', 0):.2f} {balance.get('currency', 'USDT')}" if balance else "–",
                 inline=True,
             )
-            embed.add_field(name="오픈 포지션", value=str(len(open_trades)), inline=True)
-            embed.add_field(name="하트비트 (KST)", value=heartbeat_display, inline=True)
+            embed.add_field(name="DB 포지션", value=str(len(open_trades)), inline=True)
+            embed.add_field(name="거래소 포지션", value=str(len(exchange_positions)), inline=True)
+            embed.add_field(name="하트비트 (KST)", value=heartbeat_display, inline=False)
+
+            # 실제 거래소 포지션 상세 정보
+            if exchange_positions:
+                pos_lines = []
+                for pos in exchange_positions:
+                    side = pos.get("side", "?").upper()
+                    size = pos.get("size", 0)
+                    entry = pos.get("entry_price", 0)
+                    pnl = pos.get("unrealized_pnl", 0)
+                    emoji = "🟢" if side == "LONG" else "🔴"
+                    pos_lines.append(
+                        f"{emoji} {side} {size:.4f} BTC @ ${entry:,.2f} | PnL: ${pnl:+,.2f}"
+                    )
+                embed.add_field(
+                    name="📍 현재 포지션",
+                    value="\n".join(pos_lines),
+                    inline=False,
+                )
 
             await interaction.followup.send(embed=embed)
         except Exception as e:
