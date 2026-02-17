@@ -115,6 +115,14 @@ class BitgetClient:
             self._position_mode = "one_way" if hold_mode == "single_hold" else "hedge"
             logger.info(f"📋 포지션 모드: {self._position_mode} ({hold_mode})")
 
+            # ccxt에 포지션 모드 설정 (one-way = False, hedge = True)
+            if self._position_mode == "one_way":
+                try:
+                    await self._exchange.set_position_mode(False, self.symbol)
+                    logger.info("📋 ccxt 포지션 모드 설정: one-way")
+                except Exception as mode_err:
+                    logger.debug(f"ccxt 포지션 모드 설정 스킵 (이미 설정됨): {mode_err}")
+
         except Exception as e:
             # 조회 실패 시 기본값 one_way (Bitget 기본값)
             logger.warning(f"포지션 모드 조회 실패, 기본값(one_way) 사용: {e}")
