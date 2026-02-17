@@ -231,7 +231,9 @@ def _register_commands(tree: app_commands.CommandTree, settings):
             positions = await client.get_positions()
             closed = 0
             for pos in positions:
-                await client.close_position(pos.get("symbol", client.symbol))
+                side = pos.get("side", "long")
+                size = pos.get("size", 0)
+                await client.close_position(side=side, amount=size)
                 closed += 1
             await client.close()
 
@@ -264,11 +266,27 @@ def _register_commands(tree: app_commands.CommandTree, settings):
                 await client.close()
                 return
 
+            closed_info = []
             for pos in positions:
-                await client.close_position(pos.get("symbol", client.symbol))
+                side = pos.get("side", "long")
+                size = pos.get("size", 0)
+                entry_price = pos.get("entry_price", 0)
+
+                result = await client.close_position(side=side, amount=size)
+                exit_price = result.get("price", 0)
+
+                # PnL 계산
+                if side == "long":
+                    pnl = (exit_price - entry_price) * size
+                else:
+                    pnl = (entry_price - exit_price) * size
+
+                closed_info.append(f"{side.upper()} {size:.4f} BTC | PnL: ${pnl:+,.2f}")
+
             await client.close()
 
-            await interaction.followup.send(f"✅ {len(positions)}개 포지션 청산 완료")
+            result_msg = "\n".join(closed_info)
+            await interaction.followup.send(f"✅ {len(positions)}개 포지션 청산 완료\n```\n{result_msg}\n```")
         except Exception as e:
             await interaction.followup.send(f"❌ 오류: {e}")
 
