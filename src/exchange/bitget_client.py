@@ -308,15 +308,15 @@ class BitgetClient:
         # 파라미터 병합
         order_params = params.copy() if params else {}
 
-        # TP/SL 설정 (Bitget API: presetStopLossPrice / presetStopSurplusPrice)
+        # TP/SL 설정 (ccxt가 처리하는 형식으로 전달)
         # Bitget은 가격이 0.1의 배수여야 함 (오류 코드 45115)
         if stop_loss and not order_params.get("reduceOnly", False):
             stop_loss = round(stop_loss, 1)
-            order_params["presetStopLossPrice"] = str(stop_loss)
+            order_params["stopLoss"] = {"triggerPrice": stop_loss}
             logger.info(f"📍 손절가 설정: ${stop_loss:,.1f}")
         if take_profit and not order_params.get("reduceOnly", False):
             take_profit = round(take_profit, 1)
-            order_params["presetStopSurplusPrice"] = str(take_profit)  # Bitget 익절가 파라미터명
+            order_params["takeProfit"] = {"triggerPrice": take_profit}
             logger.info(f"📍 익절가 설정: ${take_profit:,.1f}")
 
         # 포지션 모드에 따른 파라미터 설정
