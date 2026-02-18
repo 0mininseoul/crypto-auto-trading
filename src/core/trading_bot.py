@@ -62,6 +62,16 @@ class TradingBot:
         logger.info(f"   모드: {'🔧 데모' if is_demo_mode() else '⚠️ 라이브'}")
         logger.info("=" * 50)
 
+        # 초기화에 수 초가 걸릴 수 있으므로 시작 즉시 RUNNING으로 반영한다.
+        # (Discord 접속 메시지 직후 /status 조회 시 STOPPED로 보이는 현상 방지)
+        mode = get_trading_mode()
+        updated = BotStatusRepository.update_status(
+            status=BotState.RUNNING,
+            trading_mode=mode,
+        )
+        if not updated:
+            logger.warning("봇 상태 RUNNING 업데이트 실패 (bot_status row 확인 필요)")
+
         # WebSocket 클라이언트 생성
         self._ws_client = BitgetWebSocket()
 
@@ -95,21 +105,15 @@ class TradingBot:
         except Exception as e:
             logger.warning(f"AI 차트 분석기 초기화 실패: {e}")
 
-        # 봇 상태 업데이트
-        BotStatusRepository.update_status(
-            status=BotState.RUNNING,
-            trading_mode=get_trading_mode(),
-        )
-
         self._running = True
         logger.info("✅ 봇 초기화 완료")
 
     async def run(self):
         """메인 실행 루프"""
-        await self.initialize()
         mark_stopped_on_shutdown = False
 
         try:
+            await self.initialize()
             tasks = [
                 self._analysis_loop(),
                 self._position_monitor_loop(),
