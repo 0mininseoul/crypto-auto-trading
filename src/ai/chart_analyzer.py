@@ -18,7 +18,7 @@ import pandas as pd
 from src.config.settings import get_settings
 from src.exchange.data_fetcher import DataFetcher
 from src.exchange.bitget_client import BitgetClient
-from src.indicators.signals import prepare_dataframe, SignalType
+from src.indicators.signals import prepare_dataframe
 from src.ai.prompts import (
     get_system_prompt,
     build_full_prompt,
@@ -28,8 +28,8 @@ from src.ai.prompts import (
     add_pattern,
     load_learning_history,
 )
+from src.ai.analysis_guardrails import extract_finish_reason, post_process_analysis
 from src.utils.logger import setup_logger
-from src.utils.helpers import kst_now
 
 logger = setup_logger("chart_analyzer")
 
@@ -136,6 +136,12 @@ class ChartAnalyzer:
                 signal_info=signal_info,
                 analysis_type=analysis_type,
             )
+            logger.info(
+                "AI 분석 요청 (%s) | prompt_chars=%d | has_position=%s",
+                analysis_type,
+                len(user_prompt),
+                position is not None,
+            )
 
             # Gemini API 호출 (새 SDK 방식)
             response = await asyncio.to_thread(
@@ -153,7 +159,16 @@ class ChartAnalyzer:
                 ),
             )
 
-            result = response.text.strip()
+            raw_text = (response.text or "").strip()
+            finish_reason = extract_finish_reason(response)
+            result, fallback_used = post_process_analysis(
+                analysis_type=analysis_type,
+                raw_text=raw_text,
+                market_data=market_data,
+                position=position,
+                finish_reason=finish_reason,
+                logger=logger,
+            )
 
             # 캐시 저장
             self._cache[cache_key] = (datetime.now(), result)
@@ -163,7 +178,13 @@ class ChartAnalyzer:
                 self._last_entry_analysis = result
                 self._last_entry_market = market_data
 
-            logger.info(f"AI 분석 완료 ({analysis_type})")
+            logger.info(
+                "AI 분석 완료 (%s) | finish_reason=%s | chars=%d | fallback=%s",
+                analysis_type,
+                finish_reason,
+                len(result),
+                fallback_used,
+            )
             return result
 
         except Exception as e:
