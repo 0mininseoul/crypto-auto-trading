@@ -9,7 +9,8 @@ EmperorBTC 트레이딩 매뉴얼의 기술적 분석 원칙을 기반으로 Bit
 - 24시간 자동 시장 분석 및 매매 실행
 - 철저한 리스크 관리로 자본 보존
 - 웹 UI를 통한 실시간 설정 관리
-- Discord Bot을 통한 모바일 긴급 제어
+- **AI 기반 시장 분석** (Gemini 3.0 Flash) 및 자가 학습
+- Discord Bot을 통한 모바일 긴급 제어 및 분석 요청
 - 데모 트레이딩으로 전략 검증 후 실거래 전환
 
 ### 1.3 운용 규모
@@ -55,6 +56,12 @@ EmperorBTC 트레이딩 매뉴얼의 기술적 분석 원칙을 기반으로 Bit
 │ - 거래 기록   │   │ - 주문(REST)  │   │ - 14분 주기   │
 │ - 성과 데이터 │   │              │   │   Ping       │
 └──────────────┘   └──────────────┘   └──────────────┘
+                                          ▲
+                                          │ API (Chart/Image)
+                                   ┌──────────────┐
+                                   │  Gemini 3.0  │
+                                   │    Flash     │
+                                   └──────────────┘
 ```
 
 ### 2.2 기술 스택
@@ -94,7 +101,7 @@ EmperorBTC 트레이딩 매뉴얼의 기술적 분석 원칙을 기반으로 Bit
 ```python
 # 필수 지표
 indicators = {
-    'EMA': [13, 21, 50, 200],      # 지수이동평균
+    'EMA': [9, 21, 50, 200],       # 지수이동평균 (단기 반응성 위해 9 사용)
     'RSI': 14,                      # 상대강도지수
     'MACD': (12, 26, 9),           # MACD
     'OBV': True,                    # On-Balance Volume
@@ -109,67 +116,83 @@ indicators = {
 | 지표 계산 | 캔들 마감/틱 변화 시 | 실시간 업데이트 |
 | 신호 생성 | 조건 충족 즉시 | 놓치는 신호 방지 |
 | 포지션 모니터링 | 실시간 (Tick-by-Tick) | 손절/익절 즉각 반응 |
+| AI 차트 분석 | 사용자 요청 시 (`/analysis`) | 실시간 시장 진단 및 전략 제안 |
 
-### 3.2 매매 실행 엔진
+### 3.2 AI 분석 엔진 (Gemini 3.0 Flash)
+
+#### 3.2.1 기능
+- **실시간 차트 분석**: 현재 캔들 패턴, 추세, 보조지표 종합 분석
+- **전략 제안**: 진입/청산/홀딩/불타기 등 상황별 행동 제안
+- **자가 학습**: 거래 종료 후 복기(Review)를 통해 성공/실패 패턴 학습
+- **패턴 인식**: 반복되는 시장 패턴 데이터베이스화
+
+#### 3.2.2 프롬프트 구조
+- **시장 데이터**: OHLCV, EMA, RSI, MACD, OBV 수치 제공
+- **트레이딩 전략**: `TRADING_STRATEGY.md` 내용 기반 판단
+- **학습 컨텍스트**: 과거 유사 상황에서의 성공/실패 교훈 반영
+
+### 3.3 매매 실행 엔진
 
 #### 3.2.1 롱 포지션 진입 조건
 
 **필수 조건 (모두 충족):**
 ```python
+**필수 조건 (모두 충족):**
+```python
 LONG_ENTRY_CONDITIONS = {
     'trend': {
-        'daily_above_ema50': True,          # 1일봉 가격 > EMA 50
-        'ema_alignment': '13 > 21 > 50',    # 4시간봉 EMA 정배열
+        'hourly_above_ema50': True,         # 1시간봉 가격 > EMA 50
+        'ema_alignment': '9 > 21',          # 5분봉 EMA 정배열 (9 > 21)
     },
-    'structure': {
-        'higher_low': True,                  # 이전 저점보다 높은 저점
+    'momentum': {
+        'rsi_above_40': True,               # 15분봉 RSI > 40
+        'macd_rising': True,                # 15분봉 MACD 히스토그램 상승
     },
     'volume': {
-        'above_average': True,               # 거래량 > 14MA
+        'above_average': True,              # 직전 15분봉 거래량 > 14MA의 70%
     }
 }
 ```
 
-**추가 확인 (2개 이상):**
+**추가 확인 (1개 이상):**
 ```python
 LONG_CONFIRMATION = [
-    'rsi_bullish_divergence',    # RSI 상승 다이버전스
-    'rsi_bounce_from_30',        # RSI 30 이하에서 반등
-    'macd_bullish_cross',        # MACD 골든크로스
-    'obv_uptrend',               # OBV 상승 추세
-    'reversal_candle',           # 반전 캔들 (해머, 장악형)
-    'support_retest_success',    # 지지 리테스트 성공
+    'obv_uptrend',               # 15분봉 OBV 상승 추세
+    'candlestick_pattern',       # 해머형, 장악형 등 강세 패턴
+    'support_retest',            # 지지선 리테스트 성공
+    'ai_confirmation',           # Gemini 3.0 Flash 매수 의견
 ]
-# 최소 2개 이상 충족 시 진입
+# 최소 1개 이상 충족 시 진입
 ```
 
 #### 3.2.2 숏 포지션 진입 조건
 
 **필수 조건 (모두 충족):**
 ```python
+**필수 조건 (모두 충족):**
+```python
 SHORT_ENTRY_CONDITIONS = {
     'trend': {
-        'daily_below_ema50': True,          # 1일봉 가격 < EMA 50
-        'ema_alignment': '13 < 21 < 50',    # 4시간봉 EMA 역배열
+        'hourly_below_ema50': True,         # 1시간봉 가격 < EMA 50
+        'ema_alignment': '9 < 21',          # 5분봉 EMA 역배열 (9 < 21)
     },
-    'structure': {
-        'lower_high': True,                  # 이전 고점보다 낮은 고점
+    'momentum': {
+        'rsi_below_60': True,               # 15분봉 RSI < 60
+        'macd_falling': True,               # 15분봉 MACD 히스토그램 하락
     },
     'volume': {
-        'above_average': True,               # 거래량 > 14MA
+        'above_average': True,              # 직전 15분봉 거래량 > 14MA의 70%
     }
 }
 ```
 
-**추가 확인 (2개 이상):**
+**추가 확인 (1개 이상):**
 ```python
 SHORT_CONFIRMATION = [
-    'rsi_bearish_divergence',    # RSI 하락 다이버전스
-    'rsi_drop_from_70',          # RSI 70 이상에서 하락
-    'macd_bearish_cross',        # MACD 데드크로스
-    'obv_downtrend',             # OBV 하락 추세
-    'reversal_candle',           # 반전 캔들 (슈팅스타)
-    'resistance_retest_fail',    # 저항 리테스트 실패
+    'obv_downtrend',             # 15분봉 OBV 하락 추세
+    'candlestick_pattern',       # 슈팅스타, 하락장악형 등 약세 패턴
+    'resistance_retest',         # 저항선 리테스트 실패
+    'ai_confirmation',           # Gemini 3.0 Flash 매도 의견
 ]
 ```
 
@@ -351,13 +374,16 @@ CONFIGURABLE_SETTINGS = {
 | 명령어 | 설명 | 응답 |
 |--------|------|------|
 | `/status` | 현재 상태 조회 | 봇 상태, 포지션, 잔고, PnL |
+| `/analysis` | **AI 시장 분석** | Gemini 3.0 Flash 기반 분석 및 전략 제안 |
+| `/learning` | **AI 학습 현황** | 복기 수, 승률, 학습된 인사이트 조회 |
+| `/mode` | **거래 모드 전환** | 데모 ↔️ 라이브 모드 즉시 전환 |
 | `/stop` | 긴급 중단 | 모든 포지션 청산 + 거래 중단 |
 | `/pause` | 일시 정지 | 신규 거래 중단 (포지션 유지) |
 | `/resume` | 거래 재개 | 일시 정지 해제 |
 | `/close` | 포지션 청산 | 현재 포지션 즉시 청산 |
 | `/settings` | 설정 조회 | 현재 주요 설정값 |
 | `/pnl [period]` | 수익 현황 | 일간/주간/월간 PnL |
-| `/balance` | 잔고 조회 | 현재 USDT 잔고 |
+| `/balance` | 잔고 조회 | 현재 잔고 (USDT/SUSDT) |
 
 #### 3.5.2 자동 알림
 

@@ -2,7 +2,8 @@
 AI 차트 분석기 (Chart Analyzer)
 Gemini API를 사용한 실시간 차트 분석 + 자체 학습 시스템
 
-모델: gemini-3-flash-preview
+모델: gemini-2.0-flash
+SDK: google-genai (새 통합 SDK)
 """
 import asyncio
 import json
@@ -10,7 +11,8 @@ import re
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Tuple
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import pandas as pd
 
 from src.config.settings import get_settings
@@ -37,6 +39,9 @@ _chart_analyzer: Optional["ChartAnalyzer"] = None
 # 캐시 설정
 CACHE_TTL_SECONDS = 180  # 3분
 
+# 모델 이름
+MODEL_NAME = "gemini-3.0-flash"
+
 
 class ChartAnalyzer:
     """
@@ -56,7 +61,8 @@ class ChartAnalyzer:
         self._data = data_fetcher
         self._exchange = exchange_client
         self._settings = get_settings()
-        self._model: Optional[genai.GenerativeModel] = None
+        self._client: Optional[genai.Client] = None
+        self._system_prompt: str = ""
         self._cache: Dict[str, Tuple[datetime, str]] = {}
         self._last_entry_analysis: Optional[str] = None  # 진입 시 분석 저장
         self._last_entry_market: Optional[Dict[str, Any]] = None
@@ -71,20 +77,17 @@ class ChartAnalyzer:
             return
 
         try:
-            genai.configure(api_key=api_key)
-            self._model = genai.GenerativeModel(
-                model_name="gemini-3-flash-preview",
-                system_instruction=get_system_prompt(),
-            )
-            logger.info("Gemini API 초기화 완료 (gemini-3-flash-preview)")
+            self._client = genai.Client(api_key=api_key)
+            self._system_prompt = get_system_prompt()
+            logger.info(f"Gemini API 초기화 완료 ({MODEL_NAME})")
         except Exception as e:
             logger.error(f"Gemini API 초기화 실패: {e}")
-            self._model = None
+            self._client = None
 
     @property
     def is_available(self) -> bool:
         """AI 분석 사용 가능 여부"""
-        return self._model is not None
+        return self._client is not None
 
     async def analyze(
         self,
@@ -123,7 +126,7 @@ class ChartAnalyzer:
                 return "시장 데이터 수집 실패"
 
             # 프롬프트 생성
-            prompt = build_full_prompt(
+            user_prompt = build_full_prompt(
                 current_price=market_data["current_price"],
                 df_15m_summary=market_data["df_15m"],
                 df_1h_summary=market_data["df_1h"],
@@ -134,11 +137,17 @@ class ChartAnalyzer:
                 analysis_type=analysis_type,
             )
 
-            # Gemini API 호출
+            # Gemini API 호출 (새 SDK 방식)
             response = await asyncio.to_thread(
-                self._model.generate_content,
-                prompt,
-                generation_config=genai.GenerationConfig(
+                self._client.models.generate_content,
+                model=MODEL_NAME,
+                contents=[
+                    types.Content(
+                        role="user",
+                        parts=[types.Part(text=self._system_prompt + "\n\n" + user_prompt)],
+                    ),
+                ],
+                config=types.GenerateContentConfig(
                     temperature=0.3,
                     max_output_tokens=800,
                 ),
@@ -191,18 +200,24 @@ class ChartAnalyzer:
             market_at_exit = await self._collect_market_data()
 
             # 복기 프롬프트 생성
-            prompt = build_review_prompt(
+            user_prompt = build_review_prompt(
                 trade_data=trade_data,
                 entry_analysis=self._last_entry_analysis or "",
                 market_at_entry=self._last_entry_market or {},
                 market_at_exit=market_at_exit or {},
             )
 
-            # Gemini API 호출
+            # Gemini API 호출 (새 SDK 방식)
             response = await asyncio.to_thread(
-                self._model.generate_content,
-                prompt,
-                generation_config=genai.GenerationConfig(
+                self._client.models.generate_content,
+                model=MODEL_NAME,
+                contents=[
+                    types.Content(
+                        role="user",
+                        parts=[types.Part(text=self._system_prompt + "\n\n" + user_prompt)],
+                    ),
+                ],
+                config=types.GenerateContentConfig(
                     temperature=0.2,
                     max_output_tokens=1000,
                 ),

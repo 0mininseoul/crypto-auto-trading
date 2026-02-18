@@ -6,11 +6,12 @@ BTC/USDT 선물 자동매매 봇 - Bitget API + Discord 제어 + 웹 대시보�
 
 ## Features
 
-- **자동 매매**: EMA, RSI, MACD, OBV 기반 기술적 분석
+- **자동 매매**: EMA, RSI, MACD, OBV 기반 기술적 분석 (15분봉 데이 트레이딩)
+- **AI 차트 분석**: **Gemini 3.0 Flash** 모델을 이용한 실시간 시장 분석 및 인사이트 제공
 - **리스크 관리**: ATR 기반 손절/익절, 트레일링 스탑, 일일 손실 한도
-- **Discord Bot**: 모바일에서 긴급 제어 (`/status`, `/stop`, `/pause`, `/resume`)
+- **Discord Bot**: 모바일에서 긴급 제어 및 AI 분석 요청 (`/analysis`, `/learning`)
 - **웹 대시보드**: 실시간 상태 모니터링, 거래 내역, PnL 차트
-- **데모 모드**: 실거래 전 테스트넷 검증
+- **데모 모드**: 실거래 전 테스트넷 검증 (SUSDT)
 
 ## Live Demo
 
@@ -132,6 +133,9 @@ Open http://localhost:8000
 | Command | Description |
 |---------|-------------|
 | `/status` | 현재 봇 상태, 잔고, 포지션 조회 |
+| `/analysis` | **AI 시장 분석** (Gemini 3.0 Flash) 및 전략 제안 |
+| `/learning` | AI 자가 학습 현황 및 통계 조회 |
+| `/mode` | 거래 모드 전환 (Demo ↔️ Live) |
 | `/stop` | 긴급 중단 (포지션 청산 + 거래 중단) |
 | `/pause` | 일시 정지 (포지션 유지, 신규 거래 차단) |
 | `/resume` | 거래 재개 |
@@ -141,10 +145,11 @@ Open http://localhost:8000
 ## Trading Strategy
 
 ### Entry Signals (Long)
-- EMA 13 > EMA 21 (단기 상승 추세)
-- RSI 30~70 (과매수/과매도 회피)
-- MACD 히스토그램 상승
-- OBV 상승 (거래량 확인)
+### Entry Signals (Long)
+- EMA 9 > EMA 21 (단기 상승 추세)
+- RSI 40 이상 + MACD 히스토그램 상승
+- 직전 캔들 거래량 > 14MA의 70%
+- 추가 확인: OBV 상승, 캔들 패턴 등 (AI 분석 참고)
 
 ### Risk Management
 - 1회 최대 리스크: 자본의 2~5%
