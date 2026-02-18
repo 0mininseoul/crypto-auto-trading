@@ -90,9 +90,9 @@ CONSECUTIVE_LOSS_COOLDOWN = {
 # 추가 진입(불타기/물타기) 설정
 # - 포지션 수 제한(1개)은 유지하면서 같은 방향 추가 진입만 허용
 SCALE_IN_ENABLED = True
-SCALE_IN_MIN_CONFIDENCE = 0.85        # 85% 이상일 때만 추가 진입
-SCALE_IN_MAX_ADDS = 2                 # 추가 진입 최대 횟수
-SCALE_IN_MAX_SIZE_RATIO_PER_ADD = 0.5 # 1회 추가 진입은 현재 포지션의 최대 50%
+SCALE_IN_MIN_CONFIDENCE = 0.90        # 90% 이상일 때만 추가 진입 (보수형)
+SCALE_IN_MAX_ADDS = 1                 # 추가 진입 최대 1회
+SCALE_IN_MAX_SIZE_RATIO_PER_ADD = 0.3 # 1회 추가 진입은 현재 포지션의 최대 30%
 
 # ============================================
 # 진입 회피 조건
