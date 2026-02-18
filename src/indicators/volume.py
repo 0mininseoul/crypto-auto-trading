@@ -59,7 +59,7 @@ def is_volume_above_average(df: pd.DataFrame, row_idx: int = -1, threshold: floa
     vol_ma = row.get("volume_ma", 0)
     if pd.isna(vol_ma) or vol_ma == 0:
         return False
-    return row["volume"] > (vol_ma * threshold)
+    return bool(row["volume"] > (vol_ma * threshold))
 
 
 def is_volume_too_low(df: pd.DataFrame, threshold: float = 0.5, row_idx: int = -1) -> bool:
@@ -85,7 +85,7 @@ def is_volume_too_low(df: pd.DataFrame, threshold: float = 0.5, row_idx: int = -
         return True
 
     volume_ratio = volume / vol_ma
-    is_low = volume < vol_ma * threshold
+    is_low = bool(volume < vol_ma * threshold)
 
     # 디버깅 로그 (INFO 레벨로 출력하여 Railway에서 확인 가능)
     logger.info(
@@ -94,7 +94,7 @@ def is_volume_too_low(df: pd.DataFrame, threshold: float = 0.5, row_idx: int = -
         f"기준={threshold:.0%} | 회피={is_low}"
     )
 
-    return is_low
+    return bool(is_low)
 
 
 def is_obv_trending_up(df: pd.DataFrame, lookback: int = 10) -> bool:
@@ -105,7 +105,7 @@ def is_obv_trending_up(df: pd.DataFrame, lookback: int = 10) -> bool:
     # 선형 회귀 기울기로 추세 판단
     x = np.arange(len(recent_obv))
     slope = np.polyfit(x, recent_obv.values, 1)[0]
-    return slope > 0
+    return bool(slope > 0)
 
 
 def is_obv_trending_down(df: pd.DataFrame, lookback: int = 10) -> bool:
@@ -115,4 +115,4 @@ def is_obv_trending_down(df: pd.DataFrame, lookback: int = 10) -> bool:
     recent_obv = df["obv"].tail(lookback)
     x = np.arange(len(recent_obv))
     slope = np.polyfit(x, recent_obv.values, 1)[0]
-    return slope < 0
+    return bool(slope < 0)

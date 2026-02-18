@@ -67,6 +67,26 @@ MARGIN_MODE = "isolated"        # 격리 마진
 # ============================================
 STOP_LOSS_BUFFER_PERCENT = 0.3  # 손절 버퍼 %
 MAX_STOP_LOSS_PERCENT = 2.0     # 최대 손절률 (데이트레이딩)
+ATR_PERIOD = 14                 # ATR 계산 기간
+ATR_SL_BUFFER_MULTIPLIER = 0.35 # SL 버퍼에 반영할 ATR 배수
+ATR_TP_BUFFER_MULTIPLIER = 0.20 # TP(선행 체결) 버퍼에 반영할 ATR 배수
+
+# 지지/저항 레벨 추출 (스윙 클러스터링)
+LEVEL_LOOKBACK_15M = 120
+LEVEL_LOOKBACK_1H = 80
+LEVEL_SWING_WINDOW_15M = 3
+LEVEL_SWING_WINDOW_1H = 2
+LEVEL_CLUSTER_TOLERANCE_PERCENT = 0.20  # 0.20% 이내를 같은 존으로 취급
+
+# 손절/익절 계산 방식
+USE_HYBRID_SR_TP = True          # R:R + 지지/저항 혼합 TP
+ENFORCE_SR_MIN_RR_FILTER = False # SR 기준 손익비가 낮으면 진입 회피 (옵션)
+MIN_RR_RATIO = 1.5               # 최소 손익비
+
+# 거래소 브래킷 주문 정책
+# 부분익절(50/30/20)은 봇 로직으로 관리하므로, 진입 시 거래소 TP는 기본 비활성화.
+# (중복 TP 주문으로 인한 충돌/과청산 방지)
+PLACE_ENTRY_TAKE_PROFIT_ON_EXCHANGE = False
 
 TAKE_PROFIT_LEVELS = {
     1: {"rr_ratio": 1.5, "close_percent": 50, "action": "move_sl_to_entry"},
@@ -75,6 +95,13 @@ TAKE_PROFIT_LEVELS = {
 }
 
 TRAILING_STOP_PERCENT = 1.0     # 트레일링 스탑 % (데이트레이딩)
+SYNC_STOP_LOSS_TO_EXCHANGE = True  # TP/트레일링 이벤트 시 거래소 SL 동기화
+
+# 시간 배리어 (포지션 장기 방치 방지)
+TIME_BARRIER_ENABLED = True
+TIME_BARRIER_SOFT_MINUTES = 720      # 12시간 경과 시 성과 미흡하면 청산
+TIME_BARRIER_HARD_MINUTES = 1440     # 24시간 경과 시 강제 청산
+TIME_BARRIER_MIN_RR_PROGRESS = 0.30  # soft 배리어에서 요구하는 최소 R 진행도
 
 # ============================================
 # 거래 제한
@@ -100,7 +127,6 @@ SCALE_IN_MAX_SIZE_RATIO_PER_ADD = 0.3 # 1회 추가 진입은 현재 포지션�
 EXTREME_VOLATILITY_MULTIPLIER = 3.0  # 24시간 변동성 > 평균 3배
 LOW_VOLUME_THRESHOLD = 0.3           # 거래량 < 14MA의 30% (진입 회피)
 ENTRY_VOLUME_THRESHOLD = 0.7         # 거래량 > 14MA의 70% (진입 필수)
-MIN_RR_RATIO = 1.5                   # 최소 손익비
 
 # ============================================
 # MACD 히스토그램 해석 모드

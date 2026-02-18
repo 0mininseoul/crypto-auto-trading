@@ -8,7 +8,7 @@ BTC/USDT 선물 자동매매 봇 - Bitget API + Discord 제어 + 웹 대시보�
 
 - **자동 매매**: EMA, RSI, MACD, OBV 기반 기술적 분석 (15분봉 데이 트레이딩)
 - **AI 차트 분석**: **Gemini 3 Flash Preview** 모델을 이용한 실시간 시장 분석 및 인사이트 제공
-- **리스크 관리**: ATR 기반 손절/익절, 트레일링 스탑, 일일 손실 한도
+- **리스크 관리**: 하이브리드(SR+ATR+R:R) 손절/익절, 트레일링 스탑, 시간 배리어
 - **Discord Bot**: 모바일에서 긴급 제어 및 AI 분석 요청 (`/analysis`, `/learning`)
 - **웹 대시보드**: 실시간 상태 모니터링, 거래 내역, PnL 차트
 - **데모 모드**: 실거래 전 테스트넷 검증 (SUSDT)
@@ -78,9 +78,10 @@ cd crypto-auto-trading
 ### 2. Install Dependencies
 
 ```bash
-python -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+pip install -r requirements-dev.txt  # 테스트 실행용
 ```
 
 ### 3. Configure Environment
@@ -97,6 +98,14 @@ uvicorn src.web.app:app --reload --port 8000
 ```
 
 Open http://localhost:8000
+
+### 5. Run Tests
+
+```bash
+./.venv/bin/pytest -q
+```
+
+`pytest.ini` 설정으로 자동 테스트 수집 범위는 `tests/` 디렉터리로 제한됩니다.
 
 ## Environment Variables
 
@@ -152,8 +161,10 @@ Open http://localhost:8000
 - 추가 확인: OBV 상승, 캔들 패턴 등 (AI 분석 참고)
 
 ### Risk Management
-- 1회 최대 리스크: 자본의 2~5%
-- ATR 기반 동적 손절/익절
+- 1회 최대 리스크: 자본의 2~7% (신뢰도 기반 동적 리스크)
+- 하이브리드 SL/TP: 지지/저항 + ATR 버퍼 + R:R 단계익절
+- TP1/TP2/TP3 분할 익절 + TP1 이후 손절 본전 이동
+- 시간 배리어: 12시간 soft / 24시간 hard 청산
 - 일일 최대 손실: 5%
 - 최대 동시 포지션: 1개
 

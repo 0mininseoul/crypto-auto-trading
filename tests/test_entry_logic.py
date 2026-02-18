@@ -62,7 +62,7 @@ def trend_1h_df():
     """1시간봉 (추세 충족)"""
     n = 100
     df = pd.DataFrame({
-        'timestamp': pd.date_range('2024-01-01', periods=n, freq='1H'),
+        'timestamp': pd.date_range('2024-01-01', periods=n, freq='1h'),
         'close': np.full(n, 52000.0), # 15분봉보다 높거나 비슷
         'ema_9': np.full(n, 51000.0),
         'ema_50': np.full(n, 49000.0), # 가격(50000) > 50(49000) 충족하도록 수정

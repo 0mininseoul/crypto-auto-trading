@@ -82,14 +82,14 @@ def is_rsi_oversold(df: pd.DataFrame, threshold: float = 30, row_idx: int = -1) 
     """RSI 과매도 상태 확인"""
     if "rsi" not in df.columns:
         return False
-    return df["rsi"].iloc[row_idx] < threshold
+    return bool(df["rsi"].iloc[row_idx] < threshold)
 
 
 def is_rsi_overbought(df: pd.DataFrame, threshold: float = 70, row_idx: int = -1) -> bool:
     """RSI 과매수 상태 확인"""
     if "rsi" not in df.columns:
         return False
-    return df["rsi"].iloc[row_idx] > threshold
+    return bool(df["rsi"].iloc[row_idx] > threshold)
 
 
 def detect_rsi_bullish_divergence(
@@ -215,7 +215,7 @@ def is_rsi_bounce_from_oversold(df: pd.DataFrame, lookback: int = 10) -> bool:
     was_oversold = recent.min() <= 30
     currently_above_40 = recent.iloc[-1] > 40
 
-    return was_oversold and currently_above_40
+    return bool(was_oversold and currently_above_40)
 
 
 def is_rsi_drop_from_overbought(df: pd.DataFrame, lookback: int = 10) -> bool:
@@ -227,7 +227,7 @@ def is_rsi_drop_from_overbought(df: pd.DataFrame, lookback: int = 10) -> bool:
     was_overbought = recent.max() >= 70
     currently_below_60 = recent.iloc[-1] < 60
 
-    return was_overbought and currently_below_60
+    return bool(was_overbought and currently_below_60)
 
 
 def detect_macd_crossover(df: pd.DataFrame) -> Optional[str]:
@@ -263,7 +263,7 @@ def is_macd_histogram_positive(df: pd.DataFrame, row_idx: int = -1) -> bool:
         return False
     curr = df["macd_hist"].iloc[row_idx]
     prev = df["macd_hist"].iloc[row_idx - 1]
-    return prev < 0 and curr > 0
+    return bool(prev < 0 and curr > 0)
 
 
 def is_macd_histogram_negative(df: pd.DataFrame, row_idx: int = -1) -> bool:
@@ -274,4 +274,4 @@ def is_macd_histogram_negative(df: pd.DataFrame, row_idx: int = -1) -> bool:
         return False
     curr = df["macd_hist"].iloc[row_idx]
     prev = df["macd_hist"].iloc[row_idx - 1]
-    return prev > 0 and curr < 0
+    return bool(prev > 0 and curr < 0)

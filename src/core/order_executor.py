@@ -13,6 +13,8 @@ from src.database.repository import TradeRepository
 from src.database.models import Trade, TradeSide, TradeStatus
 from src.indicators.signals import Signal, SignalType
 from src.config.constants import (
+    PLACE_ENTRY_TAKE_PROFIT_ON_EXCHANGE,
+    SYNC_STOP_LOSS_TO_EXCHANGE,
     TAKE_PROFIT_LEVELS,
     TRAILING_STOP_PERCENT,
     SCALE_IN_MAX_SIZE_RATIO_PER_ADD,
@@ -113,11 +115,14 @@ class OrderExecutor:
             await self._exchange.set_margin_mode("isolated")
 
             # 주문 실행 (TP/SL 포함)
+            entry_tp = signal.take_profit_1 if PLACE_ENTRY_TAKE_PROFIT_ON_EXCHANGE else None
+            if signal.take_profit_1 and not PLACE_ENTRY_TAKE_PROFIT_ON_EXCHANGE:
+                logger.info("진입 시 거래소 TP 주문 생략 (단계별 익절은 봇 내부 로직 사용)")
             order = await self._exchange.place_market_order(
                 side=side,
                 amount=amount,
                 stop_loss=signal.stop_loss,
-                take_profit=signal.take_profit_1,
+                take_profit=entry_tp,
             )
 
             # entry_price가 0이면 signal.entry_price 사용
@@ -483,6 +488,12 @@ class OrderExecutor:
 
                 elif action == "move_sl_to_entry" and rr_ratio >= 1.5:
                     await self.execute_exit(trade, f"TP{level} (R:R {rr_ratio:.1f})", 50)
+                    if SYNC_STOP_LOSS_TO_EXCHANGE:
+                        await self._exchange.update_position_tpsl(
+                            side=trade.side.value,
+                            stop_loss=trade.entry_price,
+                            take_profit=None,
+                        )
                     # 손절을 본전으로 이동 + 실행된 TP 레벨 기록
                     executed_levels.append(level)
                     TradeRepository.update_trade(trade.id, {

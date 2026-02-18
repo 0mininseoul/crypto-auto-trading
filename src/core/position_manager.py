@@ -3,7 +3,6 @@
 포지션 모니터링, 손절/익절 실행, 트레일링 스탑
 """
 import asyncio
-from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 from src.exchange.bitget_client import BitgetClient
@@ -11,10 +10,18 @@ from src.core.order_executor import OrderExecutor
 from src.core.risk_manager import RiskManager
 from src.database.repository import TradeRepository, BotStatusRepository
 from src.database.models import Trade, TradeSide, TradeStatus
-from src.config.constants import TRAILING_STOP_PERCENT, FLASH_CRASH_PERCENT
+from src.config.constants import (
+    FLASH_CRASH_PERCENT,
+    SYNC_STOP_LOSS_TO_EXCHANGE,
+    TIME_BARRIER_ENABLED,
+    TIME_BARRIER_HARD_MINUTES,
+    TIME_BARRIER_MIN_RR_PROGRESS,
+    TIME_BARRIER_SOFT_MINUTES,
+    TRAILING_STOP_PERCENT,
+)
 from src.discord_bot.notifier import get_notifier
 from src.utils.logger import setup_logger
-from src.utils.helpers import format_usdt, format_percent
+from src.utils.helpers import kst_now
 
 logger = setup_logger("position_manager")
 
@@ -127,6 +134,12 @@ class PositionManager:
                     self._lowest_price[trade_id] = current_price
                     self._trailing_stop[trade_id] = current_price * (1 + TRAILING_STOP_PERCENT / 100)
                 logger.info(f"📈 트레일링 스탑 활성화 | #{trade_id} @ {self._trailing_stop[trade_id]:,.2f}")
+                if SYNC_STOP_LOSS_TO_EXCHANGE:
+                    await self._exchange.update_position_tpsl(
+                        side=trade.side.value,
+                        stop_loss=self._trailing_stop[trade_id],
+                        take_profit=None,
+                    )
                 # TP2 부분 익절 알림
                 await self._notifier.notify_exit(
                     side=trade.side.value,
@@ -149,6 +162,26 @@ class PositionManager:
                     quantity=trade.quantity,
                 )
                 self._cleanup_tracking(trade_id)
+                return
+
+        # === 4. 시간 배리어 ===
+        barrier_reason = self._get_time_barrier_reason(trade, current_price)
+        if barrier_reason:
+            logger.warning(f"⏱️ 시간 배리어 청산 | #{trade_id} | {barrier_reason}")
+            success = await self._executor.execute_exit(trade, barrier_reason, 100)
+            if success:
+                pnl, pnl_pct = self._calculate_pnl(trade, current_price)
+                await self._notifier.notify_exit(
+                    side=trade.side.value,
+                    entry_price=trade.entry_price,
+                    exit_price=current_price,
+                    pnl=pnl,
+                    pnl_percent=pnl_pct,
+                    reason=barrier_reason,
+                    quantity=trade.quantity,
+                )
+            self._cleanup_tracking(trade_id)
+            return
 
     async def _update_trailing_stop(self, trade: Trade, current_price: float) -> bool:
         """트레일링 스탑 업데이트"""
@@ -224,3 +257,36 @@ class PositionManager:
             pnl = (trade.entry_price - exit_price) * trade.quantity
             pnl_pct = (trade.entry_price - exit_price) / trade.entry_price * 100
         return pnl, pnl_pct
+
+    def _calculate_rr_progress(self, trade: Trade, current_price: float) -> float:
+        """
+        현재 R 진행도 계산.
+        0.0이면 본전, 1.0이면 TP1(1R) 수준의 이동을 의미.
+        """
+        if not trade.stop_loss:
+            return 0.0
+        risk = abs(trade.entry_price - trade.stop_loss)
+        if risk == 0:
+            return 0.0
+        if trade.side == TradeSide.LONG:
+            return (current_price - trade.entry_price) / risk
+        return (trade.entry_price - current_price) / risk
+
+    def _get_time_barrier_reason(self, trade: Trade, current_price: float) -> Optional[str]:
+        """시간 기반 청산 조건 확인."""
+        if not TIME_BARRIER_ENABLED or not trade.entry_time:
+            return None
+
+        elapsed_minutes = (kst_now() - trade.entry_time).total_seconds() / 60
+        rr_progress = self._calculate_rr_progress(trade, current_price)
+
+        if elapsed_minutes >= TIME_BARRIER_HARD_MINUTES:
+            return f"time_barrier_hard ({elapsed_minutes:.0f}m)"
+
+        if elapsed_minutes >= TIME_BARRIER_SOFT_MINUTES and rr_progress < TIME_BARRIER_MIN_RR_PROGRESS:
+            return (
+                f"time_barrier_soft ({elapsed_minutes:.0f}m, "
+                f"R진행 {rr_progress:.2f} < {TIME_BARRIER_MIN_RR_PROGRESS:.2f})"
+            )
+
+        return None

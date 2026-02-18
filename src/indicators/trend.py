@@ -63,7 +63,7 @@ def is_ema_bullish_alignment(df: pd.DataFrame, row_idx: int = -1) -> bool:
     """
     row = df.iloc[row_idx]
     try:
-        return (
+        return bool(
             row["ema_9"] > row["ema_21"] > row["ema_50"]
         )
     except KeyError:
@@ -78,7 +78,7 @@ def is_ema_bearish_alignment(df: pd.DataFrame, row_idx: int = -1) -> bool:
     """
     row = df.iloc[row_idx]
     try:
-        return (
+        return bool(
             row["ema_9"] < row["ema_21"] < row["ema_50"]
         )
     except KeyError:
@@ -89,13 +89,13 @@ def is_ema_bearish_alignment(df: pd.DataFrame, row_idx: int = -1) -> bool:
 def is_price_above_ema(df: pd.DataFrame, period: int, row_idx: int = -1) -> bool:
     """현재 가격이 특정 EMA 위에 있는지 확인"""
     row = df.iloc[row_idx]
-    return row["close"] > row.get(f"ema_{period}", float("inf"))
+    return bool(row["close"] > row.get(f"ema_{period}", float("inf")))
 
 
 def is_price_below_ema(df: pd.DataFrame, period: int, row_idx: int = -1) -> bool:
     """현재 가격이 특정 EMA 아래에 있는지 확인"""
     row = df.iloc[row_idx]
-    return row["close"] < row.get(f"ema_{period}", 0)
+    return bool(row["close"] < row.get(f"ema_{period}", 0))
 
 
 def detect_ema_crossover(df: pd.DataFrame, fast: int = 13, slow: int = 21) -> Optional[str]:
@@ -150,7 +150,7 @@ def is_higher_low(df: pd.DataFrame, lookback: int = 20) -> bool:
     """Higher Low 구조 확인 (상승 구조)"""
     lows = find_swing_lows(df.tail(lookback * 3), lookback=3)
     if len(lows) >= 2:
-        return lows[-1] > lows[-2]
+        return bool(lows[-1] > lows[-2])
     return False
 
 
@@ -158,5 +158,5 @@ def is_lower_high(df: pd.DataFrame, lookback: int = 20) -> bool:
     """Lower High 구조 확인 (하락 구조)"""
     highs = find_swing_highs(df.tail(lookback * 3), lookback=3)
     if len(highs) >= 2:
-        return highs[-1] < highs[-2]
+        return bool(highs[-1] < highs[-2])
     return False

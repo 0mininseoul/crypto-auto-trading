@@ -3,7 +3,7 @@ Bitget REST API 클라이언트 (Async ccxt)
 잔고 조회, OHLCV, 주문, 포지션 관리
 """
 import asyncio
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 import ccxt.async_support as ccxt
 
@@ -91,6 +91,16 @@ class BitgetClient:
             logger.info("✅ Bitget 연결 성공")
 
         return self._exchange
+
+    def _mix_product_type_and_margin_coin(self) -> Tuple[str, str]:
+        """현재 모드 기준 Bitget productType/marginCoin 반환."""
+        if is_demo_mode():
+            return "SUSDT-FUTURES", "SUSDT"
+        return "USDT-FUTURES", "USDT"
+
+    def _mix_symbol_id(self) -> str:
+        """Bitget v2 mix API용 심볼 ID 반환 (예: SBTCSUSDT)."""
+        return self.symbol.replace("/", "").replace(":SUSDT", "").replace(":USDT", "")
 
     async def _detect_position_mode(self) -> str:
         """
@@ -429,3 +439,55 @@ class BitgetClient:
         close_side = "sell" if side == "long" else "buy"
         params = {"reduceOnly": True}
         return await self.place_market_order(close_side, amount, symbol, params)
+
+    async def update_position_tpsl(
+        self,
+        side: str,
+        stop_loss: Optional[float] = None,
+        take_profit: Optional[float] = None,
+    ) -> bool:
+        """
+        포지션 TPSL(특히 SL) 동기화.
+
+        참고: Bitget v2 Mix Place-Pos-Tpsl 엔드포인트 사용.
+        내부 단계익절 로직과 함께 쓰기 위해 stop_loss 중심으로 사용한다.
+        """
+        if stop_loss is None and take_profit is None:
+            return True
+
+        exchange = await self._get_exchange()
+        product_type, margin_coin = self._mix_product_type_and_margin_coin()
+        hold_side = side.lower()
+        if self._position_mode == "one_way":
+            hold_side = "buy" if hold_side == "long" else "sell"
+        else:
+            hold_side = "long" if hold_side == "long" else "short"
+
+        request: Dict[str, Any] = {
+            "symbol": self._mix_symbol_id(),
+            "productType": product_type,
+            "marginCoin": margin_coin,
+            "holdSide": hold_side,
+        }
+        if stop_loss is not None:
+            request["stopLossTriggerPrice"] = str(round(float(stop_loss), 1))
+            request["stopLossTriggerType"] = "mark_price"
+        if take_profit is not None:
+            request["stopSurplusTriggerPrice"] = str(round(float(take_profit), 1))
+            request["stopSurplusTriggerType"] = "mark_price"
+
+        try:
+            response = await exchange.privateMixPostV2MixOrderPlacePosTpsl(request)
+            code = str(response.get("code", ""))
+            ok = code in ("00000", "0", "")
+            if ok:
+                logger.info(
+                    f"거래소 TPSL 동기화 완료 | side={side} "
+                    f"SL={request.get('stopLossTriggerPrice')} TP={request.get('stopSurplusTriggerPrice')}"
+                )
+            else:
+                logger.warning(f"거래소 TPSL 동기화 응답 코드={code} response={response}")
+            return ok
+        except Exception as e:
+            logger.warning(f"거래소 TPSL 동기화 실패: {e}")
+            return False

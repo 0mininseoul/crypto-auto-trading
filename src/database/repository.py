@@ -3,7 +3,7 @@
 DB 연결 실패 시 로컬 큐잉 지원
 """
 from datetime import datetime, date, timezone
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 
 from src.database.supabase_client import get_supabase_client
 from src.database.models import (
@@ -145,7 +145,7 @@ class BotStatusRepository:
     @staticmethod
     def update_status(
         status: Optional[BotState] = None,
-        trading_mode: Optional[TradingMode | str] = None,
+        trading_mode: Optional[Union[TradingMode, str]] = None,
         current_position: Optional[Dict] = None,
     ) -> bool:
         """봇 상태 업데이트"""

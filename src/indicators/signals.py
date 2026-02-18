@@ -37,11 +37,27 @@ from src.indicators.momentum import (
 from src.indicators.volume import (
     add_volume_indicators,
     is_volume_above_average,
-    is_volume_too_low,
     is_obv_trending_up,
     is_obv_trending_down,
 )
-from src.config.constants import MIN_RR_RATIO, MAX_STOP_LOSS_PERCENT, STOP_LOSS_BUFFER_PERCENT, MACD_HISTOGRAM_MODE, ENTRY_VOLUME_THRESHOLD
+from src.config.constants import (
+    ATR_PERIOD,
+    ATR_SL_BUFFER_MULTIPLIER,
+    ATR_TP_BUFFER_MULTIPLIER,
+    ENFORCE_SR_MIN_RR_FILTER,
+    ENTRY_VOLUME_THRESHOLD,
+    LEVEL_CLUSTER_TOLERANCE_PERCENT,
+    LEVEL_LOOKBACK_15M,
+    LEVEL_LOOKBACK_1H,
+    LEVEL_SWING_WINDOW_15M,
+    LEVEL_SWING_WINDOW_1H,
+    MACD_HISTOGRAM_MODE,
+    MAX_STOP_LOSS_PERCENT,
+    MIN_RR_RATIO,
+    STOP_LOSS_BUFFER_PERCENT,
+    TAKE_PROFIT_LEVELS,
+    USE_HYBRID_SR_TP,
+)
 from src.utils.logger import setup_logger
 
 logger = setup_logger("signals")
@@ -76,6 +92,178 @@ def prepare_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df = add_macd(df)
     df = add_volume_indicators(df)
     return df
+
+
+def _safe_atr(df: pd.DataFrame, period: int = ATR_PERIOD, row_idx: int = -2) -> float:
+    """ATR 계산. 데이터가 부족하면 0 반환."""
+    if len(df) < period + 2 or not {"high", "low", "close"}.issubset(df.columns):
+        return 0.0
+
+    high = df["high"]
+    low = df["low"]
+    prev_close = df["close"].shift(1)
+
+    tr = pd.concat(
+        [
+            high - low,
+            (high - prev_close).abs(),
+            (low - prev_close).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
+    atr = tr.rolling(period).mean()
+    value = atr.iloc[row_idx]
+
+    if pd.isna(value):
+        return 0.0
+    return float(value)
+
+
+def _cluster_levels(levels: List[float], tolerance_percent: float) -> List[float]:
+    """가까운 가격대를 하나의 SR 존으로 클러스터링."""
+    if not levels:
+        return []
+
+    tolerance = tolerance_percent / 100
+    sorted_levels = sorted(float(x) for x in levels if x > 0)
+    clusters: List[List[float]] = []
+
+    for level in sorted_levels:
+        if not clusters:
+            clusters.append([level])
+            continue
+
+        center = sum(clusters[-1]) / len(clusters[-1])
+        if center > 0 and abs(level - center) / center <= tolerance:
+            clusters[-1].append(level)
+        else:
+            clusters.append([level])
+
+    return [sum(cluster) / len(cluster) for cluster in clusters]
+
+
+def _nearest_level(levels: List[float], price: float, direction: str) -> Optional[float]:
+    """현재가 기준 가장 가까운 지지/저항 레벨 선택."""
+    if direction == "below":
+        candidates = [lvl for lvl in levels if lvl < price]
+        return max(candidates) if candidates else None
+    candidates = [lvl for lvl in levels if lvl > price]
+    return min(candidates) if candidates else None
+
+
+def _extract_sr_levels(
+    df_15m: pd.DataFrame,
+    df_1h: Optional[pd.DataFrame],
+    idx: int,
+) -> Dict[str, List[float]]:
+    """15m/1h 스윙으로 지지/저항 레벨 추출."""
+    closed_15m = df_15m.iloc[:idx + 1]
+    lows_15m: List[float] = []
+    highs_15m: List[float] = []
+    if {"low", "high"}.issubset(closed_15m.columns):
+        lows_15m = find_swing_lows(
+            closed_15m.tail(LEVEL_LOOKBACK_15M),
+            lookback=LEVEL_SWING_WINDOW_15M,
+        )
+        highs_15m = find_swing_highs(
+            closed_15m.tail(LEVEL_LOOKBACK_15M),
+            lookback=LEVEL_SWING_WINDOW_15M,
+        )
+
+    lows_1h: List[float] = []
+    highs_1h: List[float] = []
+    if (
+        df_1h is not None
+        and len(df_1h) > LEVEL_SWING_WINDOW_1H * 4
+        and {"low", "high"}.issubset(df_1h.columns)
+    ):
+        closed_1h = df_1h.iloc[:-1] if len(df_1h) > 1 else df_1h
+        lows_1h = find_swing_lows(
+            closed_1h.tail(LEVEL_LOOKBACK_1H),
+            lookback=LEVEL_SWING_WINDOW_1H,
+        )
+        highs_1h = find_swing_highs(
+            closed_1h.tail(LEVEL_LOOKBACK_1H),
+            lookback=LEVEL_SWING_WINDOW_1H,
+        )
+
+    supports = _cluster_levels(lows_15m + lows_1h, LEVEL_CLUSTER_TOLERANCE_PERCENT)
+    resistances = _cluster_levels(highs_15m + highs_1h, LEVEL_CLUSTER_TOLERANCE_PERCENT)
+    return {"supports": supports, "resistances": resistances}
+
+
+def _build_trade_levels(
+    side: SignalType,
+    current_price: float,
+    df_15m: pd.DataFrame,
+    df_1h: Optional[pd.DataFrame],
+    idx: int,
+) -> Dict[str, Any]:
+    """하이브리드 SL/TP 계산 (SR + ATR 버퍼 + R:R)."""
+    atr = _safe_atr(df_15m, ATR_PERIOD, idx)
+    rr_target = float(TAKE_PROFIT_LEVELS[1]["rr_ratio"])
+    base_buffer = current_price * (STOP_LOSS_BUFFER_PERCENT / 100)
+    sl_buffer = max(base_buffer, atr * ATR_SL_BUFFER_MULTIPLIER)
+    tp_buffer = max(base_buffer * 0.5, atr * ATR_TP_BUFFER_MULTIPLIER)
+
+    levels = _extract_sr_levels(df_15m, df_1h, idx)
+    nearest_support = _nearest_level(levels["supports"], current_price, "below")
+    nearest_resistance = _nearest_level(levels["resistances"], current_price, "above")
+
+    if side == SignalType.LONG:
+        max_sl = current_price * (1 - MAX_STOP_LOSS_PERCENT / 100)
+        structural_stop = nearest_support - sl_buffer if nearest_support else max_sl
+        stop_loss = max(structural_stop, max_sl)
+        risk = current_price - stop_loss
+        rr_tp = current_price + (risk * rr_target)
+        sr_tp = (nearest_resistance - tp_buffer) if nearest_resistance else None
+        chosen_tp = rr_tp
+        tp_basis = "rr"
+
+        if USE_HYBRID_SR_TP and sr_tp and sr_tp > current_price:
+            rr_to_sr = (sr_tp - current_price) / risk if risk > 0 else 0
+            if ENFORCE_SR_MIN_RR_FILTER and rr_to_sr < MIN_RR_RATIO:
+                return {"valid": False, "reject_reason": f"SR 손익비 부족 ({rr_to_sr:.2f} < {MIN_RR_RATIO:.2f})"}
+            chosen_tp = min(rr_tp, sr_tp)
+            tp_basis = "rr+sr"
+
+        return {
+            "valid": risk > 0,
+            "stop_loss": stop_loss,
+            "take_profit_1": chosen_tp,
+            "risk": risk,
+            "atr": atr,
+            "nearest_support": nearest_support,
+            "nearest_resistance": nearest_resistance,
+            "tp_basis": tp_basis,
+        }
+
+    max_sl = current_price * (1 + MAX_STOP_LOSS_PERCENT / 100)
+    structural_stop = nearest_resistance + sl_buffer if nearest_resistance else max_sl
+    stop_loss = min(structural_stop, max_sl)
+    risk = stop_loss - current_price
+    rr_tp = current_price - (risk * rr_target)
+    sr_tp = (nearest_support + tp_buffer) if nearest_support else None
+    chosen_tp = rr_tp
+    tp_basis = "rr"
+
+    if USE_HYBRID_SR_TP and sr_tp and sr_tp < current_price:
+        rr_to_sr = (current_price - sr_tp) / risk if risk > 0 else 0
+        if ENFORCE_SR_MIN_RR_FILTER and rr_to_sr < MIN_RR_RATIO:
+            return {"valid": False, "reject_reason": f"SR 손익비 부족 ({rr_to_sr:.2f} < {MIN_RR_RATIO:.2f})"}
+        chosen_tp = max(rr_tp, sr_tp)
+        tp_basis = "rr+sr"
+
+    return {
+        "valid": risk > 0,
+        "stop_loss": stop_loss,
+        "take_profit_1": chosen_tp,
+        "risk": risk,
+        "atr": atr,
+        "nearest_support": nearest_support,
+        "nearest_resistance": nearest_resistance,
+        "tp_basis": tp_basis,
+    }
 
 
 def check_long_entry(
@@ -180,22 +368,26 @@ def check_long_entry(
 
     # === 신호 판정 ===
     if mandatory_count >= 3 and additional_count >= 1:
-        swing_lows = find_swing_lows(df_15m.iloc[:IDX+1].tail(60), lookback=3)
         current_price = df_15m["close"].iloc[IDX]
+        levels = _build_trade_levels(
+            side=SignalType.LONG,
+            current_price=current_price,
+            df_15m=df_15m,
+            df_1h=df_1h,
+            idx=IDX,
+        )
+        if not levels["valid"]:
+            signal.reasons = reasons + [f"❌ [회피] {levels.get('reject_reason', 'SL/TP 계산 실패')}"]
+            signal.mandatory_met = mandatory_count
+            signal.additional_met = additional_count
+            return signal
 
-        buffer = 1 - (STOP_LOSS_BUFFER_PERCENT / 100)
-        max_sl_pct = 1 - (MAX_STOP_LOSS_PERCENT / 100)
-
-        if swing_lows:
-            stop_loss = swing_lows[-1] * buffer
-        else:
-            stop_loss = current_price * max_sl_pct
-
-        max_sl = current_price * max_sl_pct
-        stop_loss = max(stop_loss, max_sl)
-
-        risk = current_price - stop_loss
-        tp1 = current_price + (risk * 1.5)
+        stop_loss = float(levels["stop_loss"])
+        tp1 = float(levels["take_profit_1"])
+        reasons.append(
+            f"📐 [SLTP] ATR={levels['atr']:.1f}, 지지={levels['nearest_support']}, "
+            f"저항={levels['nearest_resistance']}, TP기준={levels['tp_basis']}"
+        )
 
         confidence = min(1.0, (mandatory_count / 3 * 0.6) + (additional_count / 4 * 0.4))
 
@@ -318,22 +510,26 @@ def check_short_entry(
 
     # === 신호 판정 ===
     if mandatory_count >= 3 and additional_count >= 1:
-        swing_highs = find_swing_highs(df_15m.iloc[:IDX+1].tail(60), lookback=3)
         current_price = df_15m["close"].iloc[IDX]
+        levels = _build_trade_levels(
+            side=SignalType.SHORT,
+            current_price=current_price,
+            df_15m=df_15m,
+            df_1h=df_1h,
+            idx=IDX,
+        )
+        if not levels["valid"]:
+            signal.reasons = reasons + [f"❌ [회피] {levels.get('reject_reason', 'SL/TP 계산 실패')}"]
+            signal.mandatory_met = mandatory_count
+            signal.additional_met = additional_count
+            return signal
 
-        buffer = 1 + (STOP_LOSS_BUFFER_PERCENT / 100)
-        max_sl_pct = 1 + (MAX_STOP_LOSS_PERCENT / 100)
-
-        if swing_highs:
-            stop_loss = swing_highs[-1] * buffer
-        else:
-            stop_loss = current_price * max_sl_pct
-
-        max_sl = current_price * max_sl_pct
-        stop_loss = min(stop_loss, max_sl)
-
-        risk = stop_loss - current_price
-        tp1 = current_price - (risk * 1.5)
+        stop_loss = float(levels["stop_loss"])
+        tp1 = float(levels["take_profit_1"])
+        reasons.append(
+            f"📐 [SLTP] ATR={levels['atr']:.1f}, 지지={levels['nearest_support']}, "
+            f"저항={levels['nearest_resistance']}, TP기준={levels['tp_basis']}"
+        )
 
         confidence = min(1.0, (mandatory_count / 3 * 0.6) + (additional_count / 4 * 0.4))
 
