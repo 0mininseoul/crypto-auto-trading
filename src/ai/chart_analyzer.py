@@ -2,7 +2,7 @@
 AI 차트 분석기 (Chart Analyzer)
 Gemini API를 사용한 실시간 차트 분석 + 자체 학습 시스템
 
-모델: gemini-2.0-flash
+모델: gemini-3.0-flash
 SDK: google-genai (새 통합 SDK)
 """
 import asyncio
@@ -40,7 +40,7 @@ _chart_analyzer: Optional["ChartAnalyzer"] = None
 CACHE_TTL_SECONDS = 180  # 3분
 
 # 모델 이름
-MODEL_NAME = "gemini-3.0-flash"
+MODEL_NAME = "gemini-3-flash-preview"
 
 
 class ChartAnalyzer:

@@ -9,7 +9,7 @@ EmperorBTC 트레이딩 매뉴얼의 기술적 분석 원칙을 기반으로 Bit
 - 24시간 자동 시장 분석 및 매매 실행
 - 철저한 리스크 관리로 자본 보존
 - 웹 UI를 통한 실시간 설정 관리
-- **AI 기반 시장 분석** (Gemini 3.0 Flash) 및 자가 학습
+- **AI 기반 시장 분석** (Gemini 3 Flash Preview) 및 자가 학습
 - Discord Bot을 통한 모바일 긴급 제어 및 분석 요청
 - 데모 트레이딩으로 전략 검증 후 실거래 전환
 
@@ -59,8 +59,8 @@ EmperorBTC 트레이딩 매뉴얼의 기술적 분석 원칙을 기반으로 Bit
                                           ▲
                                           │ API (Chart/Image)
                                    ┌──────────────┐
-                                   │  Gemini 3.0  │
-                                   │    Flash     │
+                                   │  Gemini 3   │
+                                   │ Flash Prev  │
                                    └──────────────┘
 ```
 
@@ -118,7 +118,7 @@ indicators = {
 | 포지션 모니터링 | 실시간 (Tick-by-Tick) | 손절/익절 즉각 반응 |
 | AI 차트 분석 | 사용자 요청 시 (`/analysis`) | 실시간 시장 진단 및 전략 제안 |
 
-### 3.2 AI 분석 엔진 (Gemini 3.0 Flash)
+### 3.2 AI 분석 엔진 (Gemini 3 Flash Preview)
 
 #### 3.2.1 기능
 - **실시간 차트 분석**: 현재 캔들 패턴, 추세, 보조지표 종합 분석
@@ -160,7 +160,7 @@ LONG_CONFIRMATION = [
     'obv_uptrend',               # 15분봉 OBV 상승 추세
     'candlestick_pattern',       # 해머형, 장악형 등 강세 패턴
     'support_retest',            # 지지선 리테스트 성공
-    'ai_confirmation',           # Gemini 3.0 Flash 매수 의견
+    'ai_confirmation',           # Gemini 3 Flash Preview 매수 의견
 ]
 # 최소 1개 이상 충족 시 진입
 ```
@@ -192,7 +192,7 @@ SHORT_CONFIRMATION = [
     'obv_downtrend',             # 15분봉 OBV 하락 추세
     'candlestick_pattern',       # 슈팅스타, 하락장악형 등 약세 패턴
     'resistance_retest',         # 저항선 리테스트 실패
-    'ai_confirmation',           # Gemini 3.0 Flash 매도 의견
+    'ai_confirmation',           # Gemini 3 Flash Preview 매도 의견
 ]
 ```
 
@@ -374,7 +374,7 @@ CONFIGURABLE_SETTINGS = {
 | 명령어 | 설명 | 응답 |
 |--------|------|------|
 | `/status` | 현재 상태 조회 | 봇 상태, 포지션, 잔고, PnL |
-| `/analysis` | **AI 시장 분석** | Gemini 3.0 Flash 기반 분석 및 전략 제안 |
+| `/analysis` | **AI 시장 분석** | Gemini 3 Flash Preview 기반 분석 및 전략 제안 |
 | `/learning` | **AI 학습 현황** | 복기 수, 승률, 학습된 인사이트 조회 |
 | `/mode` | **거래 모드 전환** | 데모 ↔️ 라이브 모드 즉시 전환 |
 | `/stop` | 긴급 중단 | 모든 포지션 청산 + 거래 중단 |

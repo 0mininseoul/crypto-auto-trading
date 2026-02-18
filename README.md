@@ -7,7 +7,7 @@ BTC/USDT 선물 자동매매 봇 - Bitget API + Discord 제어 + 웹 대시보�
 ## Features
 
 - **자동 매매**: EMA, RSI, MACD, OBV 기반 기술적 분석 (15분봉 데이 트레이딩)
-- **AI 차트 분석**: **Gemini 3.0 Flash** 모델을 이용한 실시간 시장 분석 및 인사이트 제공
+- **AI 차트 분석**: **Gemini 3 Flash Preview** 모델을 이용한 실시간 시장 분석 및 인사이트 제공
 - **리스크 관리**: ATR 기반 손절/익절, 트레일링 스탑, 일일 손실 한도
 - **Discord Bot**: 모바일에서 긴급 제어 및 AI 분석 요청 (`/analysis`, `/learning`)
 - **웹 대시보드**: 실시간 상태 모니터링, 거래 내역, PnL 차트
@@ -133,7 +133,7 @@ Open http://localhost:8000
 | Command | Description |
 |---------|-------------|
 | `/status` | 현재 봇 상태, 잔고, 포지션 조회 |
-| `/analysis` | **AI 시장 분석** (Gemini 3.0 Flash) 및 전략 제안 |
+| `/analysis` | **AI 시장 분석** (Gemini 3 Flash Preview) 및 전략 제안 |
 | `/learning` | AI 자가 학습 현황 및 통계 조회 |
 | `/mode` | 거래 모드 전환 (Demo ↔️ Live) |
 | `/stop` | 긴급 중단 (포지션 청산 + 거래 중단) |
