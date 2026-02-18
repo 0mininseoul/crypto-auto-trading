@@ -12,7 +12,13 @@ from src.core.risk_manager import RiskManager
 from src.database.repository import TradeRepository
 from src.database.models import Trade, TradeSide, TradeStatus
 from src.indicators.signals import Signal, SignalType
-from src.config.constants import TAKE_PROFIT_LEVELS, TRAILING_STOP_PERCENT, get_active_symbol, get_quote_currency
+from src.config.constants import (
+    TAKE_PROFIT_LEVELS,
+    TRAILING_STOP_PERCENT,
+    SCALE_IN_MAX_SIZE_RATIO_PER_ADD,
+    get_active_symbol,
+    get_quote_currency,
+)
 from src.discord_bot.notifier import get_notifier
 from src.utils.logger import setup_logger
 from src.utils.helpers import round_price, round_quantity
@@ -40,20 +46,36 @@ class OrderExecutor:
         if signal.signal_type not in (SignalType.LONG, SignalType.SHORT):
             return None
 
+        desired_side = "long" if signal.signal_type == SignalType.LONG else "short"
+        side = "buy" if desired_side == "long" else "sell"
+        trade_side = TradeSide.LONG if desired_side == "long" else TradeSide.SHORT
+
+        exchange_positions = await self._exchange.get_positions()
+        open_position = exchange_positions[0] if exchange_positions else None
+        open_trade_data = self._find_open_trade_for_side(desired_side)
+        current_scale_in_count = self._extract_scale_in_count(open_trade_data)
+
         # 거래 가능 여부 확인
-        check = await self._risk.can_trade()
+        check = await self._risk.can_trade(
+            desired_side=desired_side,
+            allow_scale_in=open_position is not None,
+            current_scale_in_count=current_scale_in_count,
+            signal_confidence=signal.confidence,
+        )
         if not check["allowed"]:
             logger.warning(f"거래 불가: {check['reasons']}")
             return None
+
+        is_scale_in = (
+            open_position is not None and
+            str(open_position.get("side", "")).lower() == desired_side
+        )
 
         # 잔고 조회
         balance = await self._exchange.get_balance()
         if balance["free"] <= 0:
             logger.warning("사용 가능한 잔고 없음")
             return None
-
-        side = "buy" if signal.signal_type == SignalType.LONG else "sell"
-        trade_side = TradeSide.LONG if signal.signal_type == SignalType.LONG else TradeSide.SHORT
 
         # 포지션 사이징 (신뢰도 기반 동적 리스크)
         position = self._risk.calculate_position_size(
@@ -68,6 +90,18 @@ class OrderExecutor:
             return None
 
         amount = round_quantity(position["size_btc"])
+        if is_scale_in and open_position:
+            current_size = float(open_position.get("size") or 0)
+            max_add_size = round_quantity(current_size * SCALE_IN_MAX_SIZE_RATIO_PER_ADD)
+            if max_add_size <= 0:
+                logger.warning("추가 진입 한도 계산 실패")
+                return None
+            if amount > max_add_size:
+                logger.info(
+                    f"추가 진입 수량 제한 적용: {amount:.6f} → {max_add_size:.6f} BTC "
+                    f"(현재 포지션의 {SCALE_IN_MAX_SIZE_RATIO_PER_ADD:.0%})"
+                )
+                amount = max_add_size
 
         try:
             # 레버리지 설정
@@ -90,33 +124,57 @@ class OrderExecutor:
             entry_price = order.get("price") or signal.entry_price
             filled_amount = order.get("amount") or amount
 
-            # DB에 거래 기록
-            trade = Trade(
-                symbol=get_active_symbol(),
-                side=trade_side,
-                entry_price=entry_price,
-                quantity=filled_amount,
-                leverage=leverage,
-                stop_loss=round_price(signal.stop_loss),
-                take_profit=round_price(signal.take_profit_1) if signal.take_profit_1 else None,
-                status=TradeStatus.OPEN,
-                entry_reason={
-                    "signal_type": signal.signal_type.value,
-                    "confidence": signal.confidence,
-                    "risk_rate": position.get("risk_rate", 0.05),
-                    "reasons": signal.reasons[:5],  # 상위 5개
-                    "mandatory_met": signal.mandatory_met,
-                    "additional_met": signal.additional_met,
-                },
-                entry_time=kst_now(),
-            )
-            trade = TradeRepository.save_trade(trade)
+            # DB 업데이트 (신규 진입 / 추가 진입)
+            if is_scale_in:
+                if open_trade_data:
+                    trade = self._update_trade_for_scale_in(
+                        open_trade_data=open_trade_data,
+                        signal=signal,
+                        entry_price=entry_price,
+                        filled_amount=filled_amount,
+                        leverage=leverage,
+                        risk_rate=position.get("risk_rate", 0.05),
+                    )
+                else:
+                    trade = self._create_trade_for_scale_in_recovery(
+                        trade_side=trade_side,
+                        open_position=open_position or {},
+                        signal=signal,
+                        entry_price=entry_price,
+                        filled_amount=filled_amount,
+                        leverage=leverage,
+                        risk_rate=position.get("risk_rate", 0.05),
+                    )
+            else:
+                trade = Trade(
+                    symbol=get_active_symbol(),
+                    side=trade_side,
+                    entry_price=entry_price,
+                    quantity=filled_amount,
+                    leverage=leverage,
+                    stop_loss=round_price(signal.stop_loss),
+                    take_profit=round_price(signal.take_profit_1) if signal.take_profit_1 else None,
+                    status=TradeStatus.OPEN,
+                    entry_reason={
+                        "signal_type": signal.signal_type.value,
+                        "confidence": signal.confidence,
+                        "risk_rate": position.get("risk_rate", 0.05),
+                        "reasons": signal.reasons[:5],  # 상위 5개
+                        "mandatory_met": signal.mandatory_met,
+                        "additional_met": signal.additional_met,
+                        "entry_mode": "new",
+                        "scale_in_count": 0,
+                    },
+                    entry_time=kst_now(),
+                )
+                trade = TradeRepository.save_trade(trade)
 
             # 성공적인 거래 후 API 에러 카운터 리셋
             self._risk.reset_api_errors()
 
             logger.info(
-                f"{'🟢 롱' if trade_side == TradeSide.LONG else '🔴 숏'} 진입 완료 | "
+                f"{'🟢 롱' if trade_side == TradeSide.LONG else '🔴 숏'} "
+                f"{'추가 진입' if is_scale_in else '진입'} 완료 | "
                 f"#{trade.id} @ {entry_price:,.2f} | "
                 f"SL: {signal.stop_loss:,.2f} | TP1: {signal.take_profit_1:,.2f}"
             )
@@ -132,6 +190,10 @@ class OrderExecutor:
                         "mandatory_met": signal.mandatory_met,
                         "additional_met": signal.additional_met,
                         "reasons": signal.reasons,
+                        "entry_mode": "scale_in" if is_scale_in else "new",
+                        "scale_in_count": self._extract_scale_in_count(
+                            trade.model_dump() if hasattr(trade, "model_dump") else None
+                        ),
                     }
                     await notifier.notify_entry(
                         side=trade_side.value,
@@ -151,6 +213,149 @@ class OrderExecutor:
             logger.error(f"진입 주문 실패: {e}")
             self._risk.record_api_error(str(e))
             return None
+
+    @staticmethod
+    def _extract_scale_in_count(trade_data: Optional[Dict[str, Any]]) -> int:
+        if not trade_data:
+            return 0
+        entry_reason = trade_data.get("entry_reason", {})
+        if not isinstance(entry_reason, dict):
+            return 0
+        try:
+            return int(entry_reason.get("scale_in_count", 0) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _find_open_trade_for_side(side: str) -> Optional[Dict[str, Any]]:
+        open_trades = TradeRepository.get_open_trades()
+        for trade_data in open_trades:
+            if str(trade_data.get("side", "")).lower() == side:
+                return trade_data
+        return None
+
+    def _update_trade_for_scale_in(
+        self,
+        open_trade_data: Dict[str, Any],
+        signal: Signal,
+        entry_price: float,
+        filled_amount: float,
+        leverage: int,
+        risk_rate: float,
+    ) -> Trade:
+        trade_id = int(open_trade_data["id"])
+        prev_quantity = float(open_trade_data.get("quantity") or 0)
+        prev_entry_price = float(open_trade_data.get("entry_price") or entry_price)
+        new_quantity = prev_quantity + filled_amount
+
+        if new_quantity <= 0:
+            weighted_entry_price = entry_price
+        else:
+            weighted_entry_price = (
+                (prev_entry_price * prev_quantity) + (entry_price * filled_amount)
+            ) / new_quantity
+
+        prev_reason = open_trade_data.get("entry_reason", {})
+        if not isinstance(prev_reason, dict):
+            prev_reason = {}
+
+        scale_in_count = self._extract_scale_in_count(open_trade_data) + 1
+        scale_in_history = prev_reason.get("scale_in_history", [])
+        if not isinstance(scale_in_history, list):
+            scale_in_history = []
+        scale_in_history.append({
+            "time": kst_now().isoformat(),
+            "price": round(entry_price, 2),
+            "quantity": round(filled_amount, 6),
+            "confidence": round(signal.confidence, 4),
+        })
+
+        updated_reason = {
+            **prev_reason,
+            "signal_type": signal.signal_type.value,
+            "confidence": signal.confidence,
+            "risk_rate": risk_rate,
+            "mandatory_met": signal.mandatory_met,
+            "additional_met": signal.additional_met,
+            "reasons": signal.reasons[:5],
+            "entry_mode": "scale_in",
+            "scale_in_count": scale_in_count,
+            "scale_in_history": scale_in_history[-10:],
+            "last_scale_in_at": kst_now().isoformat(),
+        }
+
+        TradeRepository.update_trade(trade_id, {
+            "entry_price": round_price(weighted_entry_price),
+            "quantity": new_quantity,
+            "leverage": leverage,
+            "stop_loss": round_price(signal.stop_loss) if signal.stop_loss else None,
+            "take_profit": round_price(signal.take_profit_1) if signal.take_profit_1 else None,
+            "entry_reason": updated_reason,
+        })
+
+        return Trade(
+            id=trade_id,
+            symbol=open_trade_data.get("symbol", get_active_symbol()),
+            side=TradeSide(str(open_trade_data.get("side", "long")).lower()),
+            entry_price=round_price(weighted_entry_price),
+            quantity=new_quantity,
+            leverage=leverage,
+            stop_loss=round_price(signal.stop_loss) if signal.stop_loss else None,
+            take_profit=round_price(signal.take_profit_1) if signal.take_profit_1 else None,
+            status=TradeStatus.OPEN,
+            entry_reason=updated_reason,
+            entry_time=open_trade_data.get("entry_time", kst_now()),
+        )
+
+    def _create_trade_for_scale_in_recovery(
+        self,
+        trade_side: TradeSide,
+        open_position: Dict[str, Any],
+        signal: Signal,
+        entry_price: float,
+        filled_amount: float,
+        leverage: int,
+        risk_rate: float,
+    ) -> Trade:
+        prev_quantity = float(open_position.get("size") or 0)
+        prev_entry_price = float(open_position.get("entry_price") or entry_price)
+        total_quantity = prev_quantity + filled_amount
+
+        if total_quantity <= 0:
+            weighted_entry_price = entry_price
+        else:
+            weighted_entry_price = (
+                (prev_entry_price * prev_quantity) + (entry_price * filled_amount)
+            ) / total_quantity
+
+        trade = Trade(
+            symbol=get_active_symbol(),
+            side=trade_side,
+            entry_price=round_price(weighted_entry_price),
+            quantity=total_quantity,
+            leverage=int(open_position.get("leverage") or leverage),
+            stop_loss=round_price(signal.stop_loss) if signal.stop_loss else None,
+            take_profit=round_price(signal.take_profit_1) if signal.take_profit_1 else None,
+            status=TradeStatus.OPEN,
+            entry_reason={
+                "signal_type": signal.signal_type.value,
+                "confidence": signal.confidence,
+                "risk_rate": risk_rate,
+                "reasons": signal.reasons[:5],
+                "mandatory_met": signal.mandatory_met,
+                "additional_met": signal.additional_met,
+                "entry_mode": "scale_in_recovery",
+                "scale_in_count": 1,
+                "reconciled": True,
+            },
+            entry_time=kst_now(),
+        )
+        trade = TradeRepository.save_trade(trade)
+
+        logger.warning(
+            "거래소 포지션은 있으나 DB open trade가 없어 복구 생성 후 추가 진입 반영"
+        )
+        return trade
 
     async def execute_exit(
         self,

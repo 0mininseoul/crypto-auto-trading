@@ -222,7 +222,11 @@ async def close_position():
         positions = await client.get_positions()
         closed = 0
         for pos in positions:
-            await client.close_position(pos.get("symbol", client.symbol))
+            await client.close_position(
+                side=pos.get("side", ""),
+                amount=float(pos.get("size") or 0),
+                symbol=pos.get("symbol", client.symbol),
+            )
             closed += 1
         await client.close()
         return {"status": "ok", "message": f"{closed}개 포지션 청산 완료"}

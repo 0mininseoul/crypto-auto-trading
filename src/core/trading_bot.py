@@ -4,7 +4,7 @@
 """
 import asyncio
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from src.exchange.bitget_client import BitgetClient
 from src.exchange.data_fetcher import DataFetcher
@@ -15,8 +15,8 @@ from src.core.order_executor import OrderExecutor
 from src.core.position_manager import PositionManager
 from src.indicators.signals import SignalType
 from src.database.repository import BotStatusRepository, TradeRepository
-from src.database.models import BotState, Trade
-from src.config.constants import TIMEFRAMES
+from src.database.models import BotState, Trade, TradeSide, TradeStatus
+from src.config.constants import TIMEFRAMES, MAX_STOP_LOSS_PERCENT, get_active_symbol
 from src.config.settings import get_settings
 from src.discord_bot.notifier import get_notifier
 from src.utils.logger import setup_logger
@@ -27,6 +27,7 @@ logger = setup_logger("trading_bot")
 ANALYSIS_INTERVAL = 60 * 5       # 5분마다 신호 분석 (15분봉 데이트레이딩)
 POSITION_CHECK_INTERVAL = 60     # 1분마다 포지션 모니터링
 HEARTBEAT_INTERVAL = 60 * 5      # 5분마다 하트비트
+POSITION_SYNC_STALE_STREAK = 3   # DB만 열린 포지션이 연속 N회 확인되면 정리
 
 
 class TradingBot:
@@ -43,6 +44,7 @@ class TradingBot:
         self._notifier = get_notifier()
         self._running = False
         self._settings = get_settings()
+        self._position_mismatch_streak = 0
 
     def _is_paused(self) -> bool:
         """봇이 PAUSED 상태인지 DB에서 확인"""
@@ -132,6 +134,9 @@ class TradingBot:
                 # PAUSED 상태면 분석만 하고 진입하지 않음
                 is_paused = self._is_paused()
 
+                # 거래소 포지션 ↔ DB 오픈 트레이드 동기화
+                await self._reconcile_exchange_and_db_positions()
+
                 # 시장 분석
                 signal = await self._analyzer.analyze()
 
@@ -187,6 +192,142 @@ class TradingBot:
             
             logger.info(f"⏳ 다음 캔들 마감 대기: {sleep_duration:.1f}초 후 분석")
             await asyncio.sleep(sleep_duration)
+
+    async def _reconcile_exchange_and_db_positions(self):
+        """
+        거래소 실포지션과 DB open_trades 간 불일치 보정
+
+        - 거래소 O / DB X: DB에 복구 생성
+        - 거래소 X / DB O: 연속 확인 후 stale 거래 자동 종료 처리
+        - 거래소 O / DB O: 수량/평단 드리프트 최소 보정
+        """
+        positions = await self._exchange.get_positions()
+        open_trades = TradeRepository.get_open_trades()
+
+        # 케이스 1) 거래소에는 있는데 DB에 없음 → 즉시 복구
+        if positions and not open_trades:
+            pos = positions[0]
+            side_str = str(pos.get("side", "")).lower()
+            if side_str not in ("long", "short"):
+                logger.warning(f"포지션 복구 실패: 알 수 없는 방향 {side_str}")
+                return
+
+            entry_price = float(pos.get("entry_price") or 0)
+            quantity = float(pos.get("size") or 0)
+            leverage = int(pos.get("leverage") or 1)
+
+            if entry_price <= 0 or quantity <= 0:
+                logger.warning(
+                    f"포지션 복구 실패: entry={entry_price}, quantity={quantity}"
+                )
+                return
+
+            stop_loss = (
+                entry_price * (1 - MAX_STOP_LOSS_PERCENT / 100)
+                if side_str == "long"
+                else entry_price * (1 + MAX_STOP_LOSS_PERCENT / 100)
+            )
+
+            recovered = Trade(
+                symbol=get_active_symbol(),
+                side=TradeSide(side_str),
+                entry_price=entry_price,
+                quantity=quantity,
+                leverage=leverage,
+                stop_loss=stop_loss,
+                take_profit=None,
+                status=TradeStatus.OPEN,
+                entry_reason={
+                    "source": "exchange_position_reconcile",
+                    "reconciled": True,
+                    "scale_in_count": 0,
+                },
+            )
+            saved = TradeRepository.save_trade(recovered)
+            self._position_mismatch_streak = 0
+            logger.warning(
+                f"거래소 오픈 포지션을 DB로 복구 생성: #{saved.id} {side_str} {quantity:.6f}"
+            )
+            return
+
+        # 케이스 2) DB에는 있는데 거래소에 없음 → 연속 확인 후 정리
+        if not positions and open_trades:
+            self._position_mismatch_streak += 1
+            logger.warning(
+                "DB open trade는 있으나 거래소 포지션이 없음 "
+                f"({self._position_mismatch_streak}/{POSITION_SYNC_STALE_STREAK})"
+            )
+
+            if self._position_mismatch_streak < POSITION_SYNC_STALE_STREAK:
+                return
+
+            current_price = float(self._data_fetcher.current_price or 0)
+            for trade_data in open_trades:
+                trade_id = trade_data.get("id")
+                if not trade_id:
+                    continue
+
+                entry_price = float(trade_data.get("entry_price") or 0)
+                quantity = float(trade_data.get("quantity") or 0)
+                side = str(trade_data.get("side", "")).lower()
+                exit_price = current_price if current_price > 0 else entry_price
+
+                if entry_price <= 0 or quantity <= 0:
+                    pnl = 0.0
+                    pnl_pct = 0.0
+                elif side == "short":
+                    pnl = (entry_price - exit_price) * quantity
+                    pnl_pct = (entry_price - exit_price) / entry_price * 100
+                else:
+                    pnl = (exit_price - entry_price) * quantity
+                    pnl_pct = (exit_price - entry_price) / entry_price * 100
+
+                TradeRepository.update_trade(int(trade_id), {
+                    "status": TradeStatus.CLOSED.value,
+                    "exit_price": exit_price,
+                    "exit_time": datetime.now(timezone.utc).isoformat(),
+                    "exit_reason": "sync:no_exchange_position",
+                    "pnl": pnl,
+                    "pnl_percent": round(pnl_pct, 2),
+                })
+
+            logger.warning("거래소 미존재 stale open trade 정리 완료")
+            self._position_mismatch_streak = 0
+            return
+
+        self._position_mismatch_streak = 0
+
+        # 케이스 3) 둘 다 있음 → 핵심 필드 드리프트 보정
+        if positions and open_trades:
+            pos = positions[0]
+            side = str(pos.get("side", "")).lower()
+            matching = None
+            for trade_data in open_trades:
+                if str(trade_data.get("side", "")).lower() == side:
+                    matching = trade_data
+                    break
+            if matching is None:
+                return
+
+            updates: Dict[str, Any] = {}
+            exchange_size = float(pos.get("size") or 0)
+            db_size = float(matching.get("quantity") or 0)
+            if exchange_size > 0 and abs(exchange_size - db_size) > 1e-6:
+                updates["quantity"] = exchange_size
+
+            exchange_entry = float(pos.get("entry_price") or 0)
+            db_entry = float(matching.get("entry_price") or 0)
+            if exchange_entry > 0 and abs(exchange_entry - db_entry) > 0.5:
+                updates["entry_price"] = exchange_entry
+
+            exchange_lev = int(pos.get("leverage") or 0)
+            db_lev = int(matching.get("leverage") or 0)
+            if exchange_lev > 0 and exchange_lev != db_lev:
+                updates["leverage"] = exchange_lev
+
+            if updates and matching.get("id"):
+                TradeRepository.update_trade(int(matching["id"]), updates)
+                logger.info(f"포지션 동기화 보정: trade#{matching['id']} {updates}")
 
     async def _position_monitor_loop(self):
         """1분 주기 포지션 모니터링 (SL/TP/트레일링)"""

@@ -27,6 +27,9 @@ from src.config.constants import (
     FLASH_CRASH_PERCENT,
     API_ERROR_STREAK_LIMIT,
     MIN_ORDER_SIZE_USDT,
+    SCALE_IN_ENABLED,
+    SCALE_IN_MIN_CONFIDENCE,
+    SCALE_IN_MAX_ADDS,
 )
 from src.utils.logger import setup_logger
 from src.utils.helpers import format_usdt, format_percent, kst_now
@@ -48,7 +51,13 @@ class RiskManager:
         self._consecutive_losses = 0
         self._last_loss_time: Optional[datetime] = None
 
-    async def can_trade(self) -> Dict[str, Any]:
+    async def can_trade(
+        self,
+        desired_side: Optional[str] = None,
+        allow_scale_in: bool = False,
+        current_scale_in_count: int = 0,
+        signal_confidence: float = 0.0,
+    ) -> Dict[str, Any]:
         """
         거래 가능 여부 종합 판단
 
@@ -57,9 +66,31 @@ class RiskManager:
         """
         reasons = []
 
-        # 1. 동시 포지션 제한
-        if await self._exchange.has_open_position():
-            reasons.append(f"이미 포지션 보유 중 (최대 {MAX_CONCURRENT_POSITIONS}개)")
+        # 1. 동시 포지션 제한 / 추가 진입 허용 여부
+        open_position = None
+        positions = await self._exchange.get_positions()
+        if positions:
+            open_position = positions[0]
+            open_side = str(open_position.get("side", "")).lower()
+
+            if allow_scale_in:
+                if not SCALE_IN_ENABLED:
+                    reasons.append("추가 진입 비활성화 상태")
+
+                if desired_side and open_side != desired_side:
+                    reasons.append(f"반대 방향 포지션 보유 중 ({open_side})")
+
+                if current_scale_in_count >= SCALE_IN_MAX_ADDS:
+                    reasons.append(
+                        f"추가 진입 횟수 도달 ({current_scale_in_count}/{SCALE_IN_MAX_ADDS})"
+                    )
+
+                if signal_confidence < SCALE_IN_MIN_CONFIDENCE:
+                    reasons.append(
+                        f"추가 진입 신뢰도 부족 ({signal_confidence:.0%} < {SCALE_IN_MIN_CONFIDENCE:.0%})"
+                    )
+            else:
+                reasons.append(f"이미 포지션 보유 중 (최대 {MAX_CONCURRENT_POSITIONS}개)")
 
         # 2. 일일 거래 횟수
         today_count = TradeRepository.get_today_trade_count()
@@ -110,7 +141,7 @@ class RiskManager:
         if not allowed:
             logger.warning(f"⛔ 거래 불가: {reasons}")
 
-        return {"allowed": allowed, "reasons": reasons}
+        return {"allowed": allowed, "reasons": reasons, "open_position": open_position}
 
     def get_dynamic_risk_rate(self, confidence: float) -> float:
         """
