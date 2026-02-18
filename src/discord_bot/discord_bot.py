@@ -3,6 +3,7 @@ Discord Bot (Slash 명령어 + 알림)
 PRD 3.5 기반
 """
 import asyncio
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -61,6 +62,21 @@ def _is_admin(interaction: discord.Interaction) -> bool:
     """관리자 권한 확인"""
     settings = get_settings()
     return str(interaction.user.id) == settings.discord_admin_id
+
+
+def _bold_section_headers(text: str) -> str:
+    """[섹션] 헤더 라인을 Discord 마크다운 볼드로 변환"""
+    if not text:
+        return text
+
+    lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if re.fullmatch(r"\[[^\[\]\n]{1,40}\]", stripped):
+            lines.append(f"**{stripped}**")
+        else:
+            lines.append(line)
+    return "\n".join(lines)
 
 
 def _register_commands(tree: app_commands.CommandTree, settings):
@@ -396,6 +412,7 @@ def _register_commands(tree: app_commands.CommandTree, settings):
             # 결과가 길면 자르기
             if len(analysis_result) > 4000:
                 analysis_result = analysis_result[:3997] + "..."
+            analysis_result = _bold_section_headers(analysis_result)
 
             embed = discord.Embed(
                 title="📊 AI 차트 분석",
