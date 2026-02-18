@@ -48,3 +48,25 @@ def test_general_analysis_passes_when_format_is_complete():
 
     assert fallback_used is False
     assert result == raw
+
+
+def test_entry_analysis_fallback_on_short_max_tokens():
+    raw = "1. 현재 시장 상황 요약\n- 추세: 1"
+
+    result, fallback_used = post_process_analysis(
+        analysis_type="entry",
+        raw_text=raw,
+        market_data=_sample_market_data(),
+        position=None,
+        finish_reason="FinishReason.MAX_TOKENS",
+        signal_info={
+            "signal_type": "SHORT",
+            "mandatory_met": 3,
+            "additional_met": 3,
+            "reasons": ["1시간 하락 추세", "MACD 하락 지속"],
+        },
+    )
+
+    assert fallback_used is True
+    assert "[시장 상황]" in result
+    assert "[진입 근거]" in result

@@ -167,6 +167,7 @@ class ChartAnalyzer:
                 market_data=market_data,
                 position=position,
                 finish_reason=finish_reason,
+                signal_info=signal_info,
                 logger=logger,
             )
 
@@ -246,6 +247,17 @@ class ChartAnalyzer:
 
             result = response.text.strip()
 
+            finish_reason = extract_finish_reason(response)
+            result, fallback_used = post_process_analysis(
+                analysis_type="exit",
+                raw_text=result,
+                market_data=market_at_exit or {},
+                position=None,
+                finish_reason=finish_reason,
+                trade_data=trade_data,
+                logger=logger,
+            )
+
             # 학습 데이터 추출 및 저장
             await self._process_review_result(trade_data, result)
 
@@ -253,7 +265,12 @@ class ChartAnalyzer:
             self._last_entry_analysis = None
             self._last_entry_market = None
 
-            logger.info("거래 복기 및 학습 완료")
+            logger.info(
+                "거래 복기 및 학습 완료 | finish_reason=%s | chars=%d | fallback=%s",
+                finish_reason,
+                len(result),
+                fallback_used,
+            )
             return result
 
         except Exception as e:

@@ -145,18 +145,100 @@ def build_general_fallback(
     )
 
 
+def build_entry_fallback(
+    market_data: Dict[str, Any],
+    signal_info: Optional[Dict[str, Any]] = None,
+) -> str:
+    """진입 분석 응답 불량 시 대체 메시지"""
+    df_1h = market_data.get("df_1h", {})
+    df_15m = market_data.get("df_15m", {})
+    volume = market_data.get("volume", {})
+    signal_info = signal_info or {}
+
+    trend_1h = df_1h.get("trend", "데이터 부족")
+    rsi_15m = safe_float(df_15m.get("rsi"), 50.0)
+    macd = df_15m.get("macd_direction", "N/A")
+    vol_ratio = safe_float(volume.get("ratio"), 0.0)
+    mandatory = signal_info.get("mandatory_met", "-")
+    additional = signal_info.get("additional_met", "-")
+    signal_type = str(signal_info.get("signal_type", "UNKNOWN")).upper()
+
+    reasons = signal_info.get("reasons", [])
+    reason_text = ", ".join(str(r) for r in reasons[:2]) if reasons else "핵심 근거 로그를 확인하세요."
+    risk_note = "고변동성 구간이므로 분할 진입과 손절 준수가 필수입니다." if vol_ratio >= 1.2 else "거래량이 평균 대비 높지 않으므로 추격 진입은 주의하세요."
+
+    return (
+        "[시장 상황]\n"
+        f"1시간 추세는 {trend_1h}, 15분 RSI {rsi_15m:.1f}, MACD {macd}, 거래량 비율 {vol_ratio:.0%}입니다.\n\n"
+        "[진입 근거]\n"
+        f"신호는 {signal_type}, 필수 {mandatory}/3, 추가 {additional}/4로 집계되었습니다. 근거: {reason_text}\n\n"
+        "[리스크]\n"
+        f"{risk_note}\n\n"
+        "[전략]\n"
+        "손절/익절 가격을 사전에 고정하고, 가격이 역행하면 계획대로 즉시 대응하세요."
+    )
+
+
+def build_exit_fallback(
+    market_data: Dict[str, Any],
+    trade_data: Optional[Dict[str, Any]] = None,
+) -> str:
+    """청산/복기 응답 불량 시 대체 메시지"""
+    df_1h = market_data.get("df_1h", {})
+    df_15m = market_data.get("df_15m", {})
+    trend_1h = df_1h.get("trend", "데이터 부족")
+    rsi_15m = safe_float(df_15m.get("rsi"), 50.0)
+    macd = df_15m.get("macd_direction", "N/A")
+    trade_data = trade_data or {}
+
+    pnl = safe_float(trade_data.get("pnl"), 0.0)
+    pnl_pct = safe_float(trade_data.get("pnl_percent"), 0.0)
+    outcome = "수익" if pnl >= 0 else "손실"
+
+    return (
+        "[복기 요약]\n"
+        f"현재 지표는 1시간 {trend_1h}, 15분 RSI {rsi_15m:.1f}, MACD {macd}입니다.\n\n"
+        "[거래 결과]\n"
+        f"이번 거래는 {outcome} ({pnl:+.2f} USDT / {pnl_pct:+.2f}%)로 기록되었습니다.\n\n"
+        "[개선 포인트]\n"
+        "진입 근거와 청산 근거를 각각 1개씩 로그로 고정해 다음 거래에서 동일 조건 재현 여부를 확인하세요."
+    )
+
+
 def post_process_analysis(
     analysis_type: str,
     raw_text: str,
     market_data: Dict[str, Any],
     position: Optional[Dict[str, Any]],
     finish_reason: str,
+    signal_info: Optional[Dict[str, Any]] = None,
+    trade_data: Optional[Dict[str, Any]] = None,
     logger: Any = None,
 ) -> Tuple[str, bool]:
     """모델 응답 정리 + 품질 검증 + fallback"""
     cleaned = sanitize_analysis_text(raw_text)
 
     if analysis_type != "general":
+        non_general_bad = (
+            not cleaned
+            or len(cleaned) < 120
+            or looks_truncated(cleaned)
+            or str(finish_reason).endswith("MAX_TOKENS")
+        )
+        if non_general_bad:
+            if logger is not None:
+                logger.warning(
+                    "AI %s fallback 적용 | finish_reason=%s | raw_chars=%d",
+                    analysis_type,
+                    finish_reason,
+                    len(raw_text),
+                )
+            if analysis_type == "entry":
+                return build_entry_fallback(market_data, signal_info), True
+            if analysis_type == "exit":
+                return build_exit_fallback(market_data, trade_data), True
+            return "AI 응답이 불완전하여 요약을 제공할 수 없습니다. 잠시 후 다시 시도하세요.", True
+
         normalized = cleaned or "AI 응답이 비어 있습니다. 잠시 후 다시 시도하세요."
         return normalized, normalized != raw_text
 
