@@ -377,6 +377,11 @@ def _register_commands(tree: app_commands.CommandTree, settings):
                 }
 
             # AI 분석 실행
+            logger.info(
+                "/analysis 요청 수신 | user_id=%s | has_position=%s",
+                interaction.user.id if interaction.user else "unknown",
+                position is not None,
+            )
             analysis_result = await analyzer.analyze(
                 position=position,
                 analysis_type="general",
@@ -398,9 +403,14 @@ def _register_commands(tree: app_commands.CommandTree, settings):
                 color=color,
                 timestamp=kst_now(),
             )
-            embed.set_footer(text="Powered by Gemini 3.0 Flash")
+            embed.set_footer(text="Powered by Gemini 3 Flash Preview")
 
             await interaction.followup.send(embed=embed)
+            logger.info(
+                "/analysis 응답 전송 | chars=%d | user_id=%s",
+                len(analysis_result),
+                interaction.user.id if interaction.user else "unknown",
+            )
 
         except Exception as e:
             logger.error(f"/analysis 오류: {e}", exc_info=True)

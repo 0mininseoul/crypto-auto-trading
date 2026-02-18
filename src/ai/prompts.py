@@ -3,6 +3,7 @@ AI 분석용 프롬프트 템플릿
 자체 학습 시스템 포함 - 복기 결과를 축적하여 고도화
 """
 import json
+import re
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional, List
@@ -15,6 +16,24 @@ logger = setup_logger("ai_prompts")
 # ─── 학습 기록 관리 ───
 
 LEARNING_FILE = Path(__file__).parent.parent.parent / "data" / "ai_learning.json"
+MAX_REFERENCE_CHARS = 5000
+MAX_LEARNING_CONTEXT_CHARS = 1200
+
+
+def _compact_text(text: str, max_chars: int) -> str:
+    """LLM 컨텍스트 길이 제어용 텍스트 압축"""
+    if not text:
+        return ""
+
+    compact = re.sub(r"\n{3,}", "\n\n", text).strip()
+    if len(compact) <= max_chars:
+        return compact
+
+    head_len = int(max_chars * 0.8)
+    head = compact[:head_len].rstrip()
+    if "\n" in head:
+        head = head.rsplit("\n", 1)[0].rstrip()
+    return f"{head}\n\n...(중략)..."
 
 
 def _ensure_data_dir():
@@ -165,7 +184,7 @@ def get_learning_context() -> str:
                 parts.append(f"- {p['description']}")
         parts.append("")
 
-    return "\n".join(parts)
+    return _compact_text("\n".join(parts), MAX_LEARNING_CONTEXT_CHARS)
 
 
 # ─── 지식 베이스 로드 ───
@@ -192,8 +211,8 @@ def load_trading_strategy() -> str:
 
 def get_system_prompt() -> str:
     """시스템 프롬프트 생성 (학습된 인사이트 포함)"""
-    knowledge_base = load_knowledge_base()
-    trading_strategy = load_trading_strategy()
+    knowledge_base = _compact_text(load_knowledge_base(), MAX_REFERENCE_CHARS)
+    trading_strategy = _compact_text(load_trading_strategy(), MAX_REFERENCE_CHARS)
     learning_context = get_learning_context()
 
     return f"""당신은 비트코인 선물 데이 트레이딩 전문가입니다.
@@ -362,10 +381,22 @@ def get_analysis_request_prompt(analysis_type: str = "general") -> str:
    - 주시해야 할 가격 레벨
 5. 포지션 보유 중이라면 불타기/물타기/홀딩/청산 중 추천
 
-응답 형식:
-- 각 섹션을 명확히 구분
-- 구체적인 가격과 조건 명시
-- 총 400자 이내로 간결하게
+응답 형식 (아래 5개 섹션 제목을 그대로 사용):
+[시장 상황]
+...
+[진입 조건 점검]
+...
+[미진입 사유]
+...
+[전략 제안]
+...
+[포지션 조언]
+...
+
+제약:
+- 총 350~550자
+- 문장이 중간에 끊기지 않게 완결형으로 작성
+- 각 섹션은 1~2문장, 핵심 수치 포함
 """
 
 
