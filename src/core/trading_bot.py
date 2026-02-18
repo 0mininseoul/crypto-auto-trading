@@ -107,6 +107,7 @@ class TradingBot:
     async def run(self):
         """메인 실행 루프"""
         await self.initialize()
+        mark_stopped_on_shutdown = False
 
         try:
             tasks = [
@@ -122,10 +123,11 @@ class TradingBot:
         except asyncio.CancelledError:
             logger.info("봇 종료 요청")
         except Exception as e:
+            mark_stopped_on_shutdown = True
             logger.critical(f"🚨 봇 치명적 오류: {e}")
             await self._notifier.notify_error(str(e), "CRITICAL")
         finally:
-            await self.shutdown()
+            await self.shutdown(mark_stopped=mark_stopped_on_shutdown)
 
     async def _analysis_loop(self):
         """15분 주기 시장 분석 + 신호 기반 진입"""
@@ -358,12 +360,19 @@ class TradingBot:
 
             await asyncio.sleep(HEARTBEAT_INTERVAL)
 
-    async def shutdown(self):
-        """봇 종료"""
+    async def shutdown(self, mark_stopped: bool = False):
+        """봇 종료
+
+        Args:
+            mark_stopped: True면 DB 상태를 STOPPED로 전환.
+                배포 재시작/프로세스 교체처럼 정상 종료 경로에서는 False를 사용해
+                새 인스턴스가 기록한 RUNNING 상태를 덮어쓰지 않는다.
+        """
         self._running = False
         logger.info("봇 종료 중...")
 
-        BotStatusRepository.update_status(status=BotState.STOPPED)
+        if mark_stopped:
+            BotStatusRepository.update_status(status=BotState.STOPPED)
 
         if self._ws_client:
             await self._ws_client.stop()
